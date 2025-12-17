@@ -208,7 +208,7 @@ public:
     // Display hip coordinates for all detected persons
     if (!hip_data_.empty()) {
       y_offset += 10;
-      cv::putText(im, "=== Hip Coordinates (Depth Filtered) ===", cv::Point(10, y_offset),
+      cv::putText(im, "=== Hip Coordinates ===", cv::Point(10, y_offset),
                   cv::FONT_HERSHEY_PLAIN, 1.5, cv::Scalar(0, 128, 255), 2);
       y_offset += line_height;
 
@@ -647,9 +647,6 @@ int main(int argc, char **argv) {
     return os.str();
   };
 
-  // Bilateral filter control flag
-  bool enable_bilateral_filter = true;
-
   // Data recording control
   bool recording_data = false;
   std::ofstream csv_file;
@@ -716,7 +713,6 @@ int main(int argc, char **argv) {
   std::cout << "  k       : Toggle keypoints" << std::endl;
   std::cout << "  s       : Toggle skeleton" << std::endl;
   std::cout << "  i       : Toggle info overlay" << std::endl;
-  std::cout << "  f       : Toggle bilateral filter (ON/OFF)" << std::endl;
   std::cout << "  l       : Toggle data recording (Start/Stop)" << std::endl;
   std::cout << "  SPACE   : Save current frame\n" << std::endl;
 
@@ -760,26 +756,6 @@ int main(int argc, char **argv) {
         depth_data = depth_queue.front();
         clear(depth_queue);
       }
-    }
-
-    // Apply bilateral filtering to depth data for noise reduction
-    // This filtering operates in spatial domain only (no time delay)
-    // Perfect for high-speed motion scenarios (trampoline athletes, etc.)
-    if (!depth_data.empty() && enable_bilateral_filter) {
-      // Convert depth to 32F format for bilateral filtering (which only supports 8U and 32F)
-      cv::Mat depth_float;
-      depth_data.convertTo(depth_float, CV_32F);
-
-      // Apply bilateral filter
-      cv::Mat depth_filtered;
-      // Parameters: kernel_size=5, sigmaColor=40, sigmaSpace=40
-      // - kernel_size: filter window size (3-7 recommended)
-      // - sigmaColor: color space standard deviation (30-50 for depth)
-      // - sigmaSpace: coordinate space standard deviation (30-50)
-      cv::bilateralFilter(depth_float, depth_filtered, 5, 40, 40);
-
-      // Convert back to 16U format (millimeters)
-      depth_filtered.convertTo(depth_data, CV_16U);
     }
 
     // Process if we have an image
@@ -862,12 +838,7 @@ int main(int argc, char **argv) {
                     FONT_FACE, 1.5, cv::Scalar(0, 255, 255), 2);
       }
 
-      // Display filter status and recording status
-      std::ostringstream status_str;
-      status_str << "Filter: " << (enable_bilateral_filter ? "ON" : "OFF");
-      cv::putText(display, status_str.str(), cv::Point(10, 50),
-                  FONT_FACE, 1.3, enable_bilateral_filter ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255), 2);
-
+      // Display recording status
       if (recording_data) {
         cv::putText(display, "[REC]", cv::Point(display.cols - 80, 50),
                     FONT_FACE, 1.5, cv::Scalar(0, 0, 255), 2);
@@ -933,7 +904,6 @@ int main(int argc, char **argv) {
           csv_file << frame_count << ","
                    << timestamp << ","
                    << hip.person_id << ","
-                   << enable_bilateral_filter << ","
                    << std::fixed << std::setprecision(2)
                    << hip.camera_pos.x << ","
                    << hip.camera_pos.y << ","
@@ -1005,10 +975,6 @@ int main(int argc, char **argv) {
     } else if (key == 'i' || key == 'I') {
       show_info = !show_info;
       std::cout << "Info overlay: " << (show_info ? "ON" : "OFF") << std::endl;
-    } else if (key == 'f' || key == 'F') {
-      // Toggle bilateral filter
-      enable_bilateral_filter = !enable_bilateral_filter;
-      std::cout << "Bilateral filter: " << (enable_bilateral_filter ? "ON" : "OFF") << std::endl;
     } else if (key == 'l' || key == 'L') {
       // Toggle data recording
       if (!recording_data) {
@@ -1021,7 +987,7 @@ int main(int argc, char **argv) {
         csv_file.open(filename.str());
         if (csv_file.is_open()) {
           // Write CSV header
-          csv_file << "frame,timestamp_ms,person_id,filter_enabled,"
+          csv_file << "frame,timestamp_ms,person_id,"
                    << "cam_x,cam_y,cam_z,"
                    << "new_x,new_y,new_z\n";
           recording_data = true;
