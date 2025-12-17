@@ -11,11 +11,13 @@ YOLOPoseDetector::YOLOPoseDetector(
     const std::string& model_path,
     int input_size,
     float conf_threshold,
-    float iou_threshold)
+    float iou_threshold,
+    bool use_cuda)
     : model_path_(model_path),
       input_size_(input_size),
       conf_threshold_(conf_threshold),
       iou_threshold_(iou_threshold),
+      use_cuda_(use_cuda),
       env_(ORT_LOGGING_LEVEL_WARNING, "YOLOPose"),
       scale_factor_(1.0f),
       pad_w_(0),
@@ -25,6 +27,23 @@ YOLOPoseDetector::YOLOPoseDetector(
     session_options_.SetIntraOpNumThreads(4);
     session_options_.SetGraphOptimizationLevel(
         GraphOptimizationLevel::ORT_ENABLE_ALL);
+
+    // 配置 CUDA 执行提供程序
+    if (use_cuda_) {
+        try {
+            OrtCUDAProviderOptions cuda_options;
+            cuda_options.device_id = 0;  // GPU 设备 ID
+            cuda_options.arena_extend_strategy = 0;
+            cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchExhaustive;
+            cuda_options.do_copy_in_default_stream = 1;
+            session_options_.AppendExecutionProvider_CUDA(cuda_options);
+            std::cout << "✓ CUDA execution provider configured (GPU 0)" << std::endl;
+        } catch (const Ort::Exception& e) {
+            std::cerr << "Warning: Failed to configure CUDA: " << e.what() << std::endl;
+            std::cerr << "Falling back to CPU execution" << std::endl;
+            use_cuda_ = false;
+        }
+    }
 }
 
 YOLOPoseDetector::~YOLOPoseDetector() {

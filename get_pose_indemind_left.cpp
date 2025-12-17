@@ -614,9 +614,9 @@ int main(int argc, char **argv) {
   std::cout << "  cx: " << param._K[2] << ", cy: " << param._K[5] << std::endl;
   std::cout << "  Resolution: 640x400" << std::endl;
 
-  // Initialize YOLO Pose Detector
+  // Initialize YOLO Pose Detector with CUDA
   std::cout << "\nModel: " << model_path << std::endl;
-  YOLOPoseDetector pose_detector(model_path, 640, 0.5f, 0.45f);
+  YOLOPoseDetector pose_detector(model_path, 640, 0.5f, 0.45f, true);  // true = 启用 CUDA
   if (!pose_detector.Init()) {
     std::cerr << "Failed to initialize YOLO Pose Detector!" << std::endl;
     delete m_pSDK;

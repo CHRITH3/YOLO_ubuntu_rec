@@ -64,27 +64,53 @@ else()
     message(FATAL_ERROR "✗ OpenCV not found! Please install OpenCV.")
 endif()
 
-# 2. ONNX Runtime (Required)
-# Try to find ONNX Runtime in common locations
-find_path(ONNXRUNTIME_INCLUDE_DIR
-    NAMES onnxruntime_cxx_api.h
-    PATHS
-        /usr/local/include/onnxruntime
-        /usr/include/onnxruntime
-        C:/Program\ Files/onnxruntime/include
-        ${PROJECT_SOURCE_DIR}/onnxruntime/include
-    DOC "ONNX Runtime include directory"
-)
+# 2. ONNX Runtime (Required) - 优先使用 Conda 环境中的 GPU 版本
+# 检测 Conda 环境
+if(DEFINED ENV{CONDA_PREFIX})
+    set(CONDA_PREFIX $ENV{CONDA_PREFIX})
+    message(STATUS "✓ Detected Conda environment: ${CONDA_PREFIX}")
 
-find_library(ONNXRUNTIME_LIB
-    NAMES onnxruntime
-    PATHS
-        /usr/local/lib
-        /usr/lib
-        C:/Program\ Files/onnxruntime/lib
-        ${PROJECT_SOURCE_DIR}/onnxruntime/lib
-    DOC "ONNX Runtime library"
-)
+    # 优先从 Conda 环境查找
+    find_path(ONNXRUNTIME_INCLUDE_DIR
+        NAMES onnxruntime_cxx_api.h
+        PATHS
+            ${CONDA_PREFIX}/include/onnxruntime
+            ${CONDA_PREFIX}/include
+        NO_DEFAULT_PATH
+        DOC "ONNX Runtime include directory"
+    )
+
+    find_library(ONNXRUNTIME_LIB
+        NAMES onnxruntime
+        PATHS
+            ${CONDA_PREFIX}/lib
+        NO_DEFAULT_PATH
+        DOC "ONNX Runtime library"
+    )
+endif()
+
+# 如果 Conda 环境中没找到，再从系统路径查找
+if(NOT ONNXRUNTIME_INCLUDE_DIR OR NOT ONNXRUNTIME_LIB)
+    find_path(ONNXRUNTIME_INCLUDE_DIR
+        NAMES onnxruntime_cxx_api.h
+        PATHS
+            /usr/local/include/onnxruntime
+            /usr/include/onnxruntime
+            C:/Program\ Files/onnxruntime/include
+            ${PROJECT_SOURCE_DIR}/onnxruntime/include
+        DOC "ONNX Runtime include directory"
+    )
+
+    find_library(ONNXRUNTIME_LIB
+        NAMES onnxruntime
+        PATHS
+            /usr/local/lib
+            /usr/lib
+            C:/Program\ Files/onnxruntime/lib
+            ${PROJECT_SOURCE_DIR}/onnxruntime/lib
+        DOC "ONNX Runtime library"
+    )
+endif()
 
 if(ONNXRUNTIME_INCLUDE_DIR AND ONNXRUNTIME_LIB)
     message(STATUS "✓ Found ONNX Runtime")

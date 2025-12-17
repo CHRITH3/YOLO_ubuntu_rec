@@ -369,4 +369,5 @@ CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o: \
  /usr/include/c++/11/bits/atomic_base.h \
  /usr/include/c++/11/bits/atomic_lockfree_defines.h \
  /usr/include/c++/11/backward/auto_ptr.h \
- /usr/local/include/onnxruntime/onnxruntime_cxx_inline.h
+ /usr/local/include/onnxruntime/onnxruntime_cxx_inline.h \
+ /usr/include/c++/11/iterator /usr/include/c++/11/bits/stream_iterator.h

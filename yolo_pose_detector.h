@@ -71,7 +71,8 @@ public:
         const std::string& model_path,
         int input_size = 640,
         float conf_threshold = 0.5f,
-        float iou_threshold = 0.45f);
+        float iou_threshold = 0.45f,
+        bool use_cuda = true);  // 添加 CUDA 参数，默认启用
 
     ~YOLOPoseDetector();
 
@@ -148,6 +149,7 @@ private:
     int input_size_;                  // Model input size (640x640)
     float conf_threshold_;            // Confidence threshold
     float iou_threshold_;             // NMS IoU threshold
+    bool use_cuda_;                   // 是否使用 CUDA 加速
 
     // ONNX Runtime components
     Ort::Env env_;

@@ -380,6 +380,7 @@ CMakeFiles/yolo_pose_detection.dir/get_pose_with_depth.cpp.o: \
  /usr/include/c++/11/bits/atomic_lockfree_defines.h \
  /usr/include/c++/11/backward/auto_ptr.h \
  /usr/local/include/onnxruntime/onnxruntime_cxx_inline.h \
+ /usr/include/c++/11/iterator /usr/include/c++/11/bits/stream_iterator.h \
  /home/chris4/workspace/from_vm/YOLO/pose_utils.h \
  /usr/include/c++/11/mutex /usr/include/c++/11/chrono \
  /usr/include/c++/11/ratio /usr/include/c++/11/bits/parse_numbers.h \

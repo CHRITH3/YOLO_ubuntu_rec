@@ -64,17 +64,25 @@ else
     print_success "OpenCV found: $(pkg-config --modversion opencv)"
 fi
 
-# Check ONNX Runtime
-if [ ! -f "/usr/local/lib/libonnxruntime.so" ]; then
-    print_warning "ONNX Runtime not found in /usr/local/lib/"
-    print_warning "Please run: ./install_onnxruntime.sh"
+# Check ONNX Runtime (支持 Conda 环境)
+ONNX_FOUND=false
+if [ -n "$CONDA_PREFIX" ] && [ -f "$CONDA_PREFIX/lib/libonnxruntime.so" ]; then
+    print_success "ONNX Runtime found in Conda: $CONDA_PREFIX/lib/"
+    ONNX_FOUND=true
+elif [ -f "/usr/local/lib/libonnxruntime.so" ]; then
+    print_success "ONNX Runtime found in /usr/local/lib/"
+    ONNX_FOUND=true
+fi
+
+if [ "$ONNX_FOUND" = false ]; then
+    print_warning "ONNX Runtime not found!"
+    print_warning "For GPU version: conda activate your_env && pip install onnxruntime-gpu"
+    print_warning "For CPU version: ./install_onnxruntime.sh"
     echo -n "Continue anyway? (y/n): "
     read -r response
     if [ "$response" != "y" ]; then
         exit 1
     fi
-else
-    print_success "ONNX Runtime found"
 fi
 
 # Check required directories
