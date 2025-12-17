@@ -1,6 +1,7 @@
 CMakeFiles/yolo_pose_rgb_only.dir/get_pose_rgb_only.cpp.o: \
- /home/chris/Desktop/YOLO/get_pose_rgb_only.cpp \
- /usr/include/stdc-predef.h /home/chris/Desktop/YOLO/yolo_pose_detector.h \
+ /home/chris4/workspace/from_vm/YOLO/get_pose_rgb_only.cpp \
+ /usr/include/stdc-predef.h \
+ /home/chris4/workspace/from_vm/YOLO/yolo_pose_detector.h \
  /usr/local/include/opencv2/opencv.hpp \
  /usr/local/include/opencv2/opencv_modules.hpp \
  /usr/local/include/opencv2/core.hpp \
@@ -369,5 +370,6 @@ CMakeFiles/yolo_pose_rgb_only.dir/get_pose_rgb_only.cpp.o: \
  /usr/include/c++/11/bits/atomic_lockfree_defines.h \
  /usr/include/c++/11/backward/auto_ptr.h \
  /usr/local/include/onnxruntime/onnxruntime_cxx_inline.h \
- /home/chris/Desktop/YOLO/pose_utils.h /usr/include/c++/11/chrono \
- /usr/include/c++/11/ratio /usr/include/c++/11/bits/parse_numbers.h
+ /home/chris4/workspace/from_vm/YOLO/pose_utils.h \
+ /usr/include/c++/11/chrono /usr/include/c++/11/ratio \
+ /usr/include/c++/11/bits/parse_numbers.h

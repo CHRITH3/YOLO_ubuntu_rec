@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = 
 
-CXX_INCLUDES = -I/home/chris/Desktop/YOLO -I/home/chris/Desktop/YOLO/include -I/usr/local/include/onnxruntime -isystem /usr/local/include/opencv
+CXX_INCLUDES = -I/home/chris4/workspace/from_vm/YOLO -I/home/chris4/workspace/from_vm/YOLO/include -I/usr/local/include/onnxruntime -isystem /usr/local/include/opencv
 
 CXX_FLAGS =  -Wall -Wextra -O3 -DNDEBUG -O3 -march=native -std=gnu++14
 

@@ -8,9 +8,9 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/home/chris/Desktop/YOLO/get_pose_with_depth.cpp" "CMakeFiles/yolo_pose_detection.dir/get_pose_with_depth.cpp.o" "gcc" "CMakeFiles/yolo_pose_detection.dir/get_pose_with_depth.cpp.o.d"
-  "/home/chris/Desktop/YOLO/pose_utils.cpp" "CMakeFiles/yolo_pose_detection.dir/pose_utils.cpp.o" "gcc" "CMakeFiles/yolo_pose_detection.dir/pose_utils.cpp.o.d"
-  "/home/chris/Desktop/YOLO/yolo_pose_detector.cpp" "CMakeFiles/yolo_pose_detection.dir/yolo_pose_detector.cpp.o" "gcc" "CMakeFiles/yolo_pose_detection.dir/yolo_pose_detector.cpp.o.d"
+  "/home/chris4/workspace/from_vm/YOLO/get_pose_with_depth.cpp" "CMakeFiles/yolo_pose_detection.dir/get_pose_with_depth.cpp.o" "gcc" "CMakeFiles/yolo_pose_detection.dir/get_pose_with_depth.cpp.o.d"
+  "/home/chris4/workspace/from_vm/YOLO/pose_utils.cpp" "CMakeFiles/yolo_pose_detection.dir/pose_utils.cpp.o" "gcc" "CMakeFiles/yolo_pose_detection.dir/pose_utils.cpp.o.d"
+  "/home/chris4/workspace/from_vm/YOLO/yolo_pose_detector.cpp" "CMakeFiles/yolo_pose_detection.dir/yolo_pose_detector.cpp.o" "gcc" "CMakeFiles/yolo_pose_detection.dir/yolo_pose_detector.cpp.o.d"
   )
 
 # Targets to which this target links.

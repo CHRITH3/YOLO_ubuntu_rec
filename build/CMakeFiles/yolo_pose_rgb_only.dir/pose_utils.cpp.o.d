@@ -1,7 +1,8 @@
 CMakeFiles/yolo_pose_rgb_only.dir/pose_utils.cpp.o: \
- /home/chris/Desktop/YOLO/pose_utils.cpp /usr/include/stdc-predef.h \
- /home/chris/Desktop/YOLO/pose_utils.h \
- /home/chris/Desktop/YOLO/yolo_pose_detector.h \
+ /home/chris4/workspace/from_vm/YOLO/pose_utils.cpp \
+ /usr/include/stdc-predef.h \
+ /home/chris4/workspace/from_vm/YOLO/pose_utils.h \
+ /home/chris4/workspace/from_vm/YOLO/yolo_pose_detector.h \
  /usr/local/include/opencv2/opencv.hpp \
  /usr/local/include/opencv2/opencv_modules.hpp \
  /usr/local/include/opencv2/core.hpp \
