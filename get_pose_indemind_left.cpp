@@ -237,6 +237,38 @@ public:
       }
     }
 
+    // Display landing points (极低点落点信息)
+    if (!landing_points_.empty()) {
+      y_offset += 15;
+      cv::putText(im, "=== Landing Points ===", cv::Point(10, y_offset),
+                  cv::FONT_HERSHEY_PLAIN, 1.5, cv::Scalar(255, 0, 128), 2);
+      y_offset += line_height;
+
+      // Show only the last 5 landing points to avoid overcrowding
+      size_t start_idx = (landing_points_.size() > 5) ? landing_points_.size() - 5 : 0;
+      for (size_t i = start_idx; i < landing_points_.size(); i++) {
+        const auto& lp = landing_points_[i];
+
+        std::ostringstream lp_str;
+        lp_str << "落点" << lp.landing_id << ": "
+               << lp.time_minutes << "分" << lp.time_seconds << "秒  "
+               << "X=" << std::fixed << std::setprecision(1) << lp.new_frame_x
+               << " Y=" << lp.new_frame_y << " mm";
+        cv::putText(im, lp_str.str(), cv::Point(10, y_offset),
+                    cv::FONT_HERSHEY_PLAIN, 1.3, cv::Scalar(200, 0, 100), 2);
+        y_offset += line_height;
+      }
+
+      // Show total count if more than displayed
+      if (landing_points_.size() > 5) {
+        std::ostringstream total_str;
+        total_str << "(Total landing points: " << landing_points_.size() << ")";
+        cv::putText(im, total_str.str(), cv::Point(10, y_offset),
+                    cv::FONT_HERSHEY_PLAIN, 1.0, cv::Scalar(100, 100, 100), 1);
+        y_offset += line_height;
+      }
+    }
+
     // Draw fluctuation curve at the bottom
     if (!hip_data_.empty()) {
       y_offset += 20;
@@ -460,9 +492,25 @@ public:
     bool has_new_frame;
   };
 
+  // Structure to store landing point information
+  struct LandingPoint {
+    int landing_id;           // 落点编号 (从1开始)
+    int time_minutes;         // 时间-分钟部分
+    int time_seconds;         // 时间-秒部分
+    double new_frame_x;       // 新坐标系X坐标
+    double new_frame_y;       // 新坐标系Y坐标
+    double new_frame_z;       // 新坐标系Z坐标（极低点值）
+  };
+
   // Update hip data for all detected persons
   void UpdateHipData(const std::vector<HipInfo> &hip_data) {
     hip_data_ = hip_data;
+
+    // Initialize start time on first call
+    if (!start_time_initialized_) {
+      start_time_ = std::chrono::steady_clock::now();
+      start_time_initialized_ = true;
+    }
 
     // Update history for curve plotting (track first person's Z coordinate)
     if (!hip_data.empty()) {
@@ -470,7 +518,90 @@ public:
       if (z_history_.size() > max_history_size_) {
         z_history_.pop_front();
       }
+
+      // Check for landing point in new coordinate system Z
+      if (hip_data[0].has_new_frame) {
+        CheckLandingPoint(hip_data[0]);
+      }
     }
+  }
+
+  /**
+   * Check if the current frame represents a landing point (local minimum of new frame Z).
+   * A landing point is detected when Z transitions from descending to ascending.
+   */
+  void CheckLandingPoint(const HipInfo &hip) {
+    double current_z = hip.new_frame_pos.z;
+
+    // Need at least one previous value to detect trend
+    if (new_z_history_.empty()) {
+      new_z_history_.push_back(current_z);
+      last_new_z_ = current_z;
+      return;
+    }
+
+    // Determine current trend: is Z descending or ascending?
+    bool is_descending = (current_z < last_new_z_);
+    bool is_ascending = (current_z > last_new_z_);
+
+    // Detect local minimum: was descending, now ascending
+    // Use a small threshold to avoid noise (e.g., 5mm)
+    const double noise_threshold = 5.0;
+    bool significant_descent = (last_new_z_ - current_z) > noise_threshold;
+    bool significant_ascent = (current_z - last_new_z_) > noise_threshold;
+
+    if (was_descending_ && is_ascending && significant_ascent) {
+      // Found a local minimum! The previous point was the landing point
+      double landing_z = last_new_z_;
+
+      // Calculate time since start
+      auto now = std::chrono::steady_clock::now();
+      auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+          now - start_time_).count();
+      int total_seconds = static_cast<int>(elapsed_ms / 1000);
+      int minutes = total_seconds / 60;
+      int seconds = total_seconds % 60;
+
+      // Create landing point record
+      landing_count_++;
+      LandingPoint lp;
+      lp.landing_id = landing_count_;
+      lp.time_minutes = minutes;
+      lp.time_seconds = seconds;
+      lp.new_frame_x = hip.new_frame_pos.x;
+      lp.new_frame_y = hip.new_frame_pos.y;
+      lp.new_frame_z = landing_z;
+
+      landing_points_.push_back(lp);
+
+      // Output to console
+      std::cout << "\n========================================" << std::endl;
+      std::cout << "落点" << lp.landing_id << "：" << std::endl;
+      std::cout << "  时间: " << lp.time_minutes << "分" << lp.time_seconds << "秒" << std::endl;
+      std::cout << "  新坐标系 X: " << std::fixed << std::setprecision(1) << lp.new_frame_x << " mm" << std::endl;
+      std::cout << "  新坐标系 Y: " << std::fixed << std::setprecision(1) << lp.new_frame_y << " mm" << std::endl;
+      std::cout << "  新坐标系 Z (极低点): " << std::fixed << std::setprecision(1) << lp.new_frame_z << " mm" << std::endl;
+      std::cout << "========================================\n" << std::endl;
+    }
+
+    // Update trend tracking
+    if (significant_descent) {
+      was_descending_ = true;
+    } else if (significant_ascent) {
+      was_descending_ = false;
+    }
+
+    // Update history
+    new_z_history_.push_back(current_z);
+    if (new_z_history_.size() > 10) {
+      new_z_history_.pop_front();
+    }
+    last_new_z_ = current_z;
+  }
+
+  // Get landing points for display
+  const std::vector<LandingPoint>& GetLandingPoints() const {
+    return landing_points_;
   }
 
   // Draw Z-coordinate fluctuation curve
@@ -554,6 +685,15 @@ private:
   // History data for fluctuation curve
   std::deque<double> z_history_;
   const size_t max_history_size_ = 100;  // Store last 100 frames
+
+  // Landing point detection variables (for new frame Z coordinate)
+  std::deque<double> new_z_history_;              // 新坐标系Z轴历史数据（用于极低点检测）
+  std::vector<LandingPoint> landing_points_;      // 已检测到的落点列表
+  int landing_count_ = 0;                         // 落点计数器
+  bool was_descending_ = false;                   // 上一帧是否处于下降趋势
+  double last_new_z_ = 0.0;                       // 上一帧的新坐标系Z值
+  std::chrono::steady_clock::time_point start_time_;  // 程序启动时间
+  bool start_time_initialized_ = false;           // 是否已初始化启动时间
 };
 
 void OnDepthMouseCallback(int event, int x, int y, int flags, void *userdata) {
