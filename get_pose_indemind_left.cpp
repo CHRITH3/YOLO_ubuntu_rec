@@ -250,8 +250,8 @@ public:
         const auto& lp = landing_points_[i];
 
         std::ostringstream lp_str;
-        lp_str << "落点" << lp.landing_id << ": "
-               << lp.time_minutes << "分" << lp.time_seconds << "秒  "
+        lp_str << "landing point" << lp.landing_id << ": "
+               << lp.time_minutes << "min " << lp.time_seconds << "s "
                << "X=" << std::fixed << std::setprecision(1) << lp.new_frame_x
                << " Y=" << lp.new_frame_y << " mm";
         cv::putText(im, lp_str.str(), cv::Point(10, y_offset),
@@ -502,6 +502,14 @@ public:
     double new_frame_z;       // 新坐标系Z坐标（极低点值）
   };
 
+  // Structure to store frame data for weighted averaging
+  struct FrameData {
+    double x;                 // 新坐标系X坐标
+    double y;                 // 新坐标系Y坐标
+    double z;                 // 新坐标系Z坐标
+    std::chrono::steady_clock::time_point timestamp;  // 帧时间戳
+  };
+
   // Update hip data for all detected persons
   void UpdateHipData(const std::vector<HipInfo> &hip_data) {
     hip_data_ = hip_data;
@@ -528,75 +536,174 @@ public:
 
   /**
    * Check if the current frame represents a landing point (local minimum of new frame Z).
-   * A landing point is detected when Z transitions from descending to ascending.
+   * Uses delayed confirmation and Z-weighted averaging for improved accuracy.
+   *
+   * Algorithm:
+   * 1. Store frame data in a circular buffer
+   * 2. Detect potential minimum when Z transitions from descending to ascending
+   * 3. Wait for CONFIRM_FRAMES to confirm the minimum
+   * 4. Calculate weighted average of X, Y coordinates (weight based on Z proximity to minimum)
    */
   void CheckLandingPoint(const HipInfo &hip) {
     double current_z = hip.new_frame_pos.z;
+    auto now = std::chrono::steady_clock::now();
 
-    // Need at least one previous value to detect trend
-    if (new_z_history_.empty()) {
-      new_z_history_.push_back(current_z);
+    // Add current frame to buffer
+    FrameData fd;
+    fd.x = hip.new_frame_pos.x;
+    fd.y = hip.new_frame_pos.y;
+    fd.z = hip.new_frame_pos.z;
+    fd.timestamp = now;
+    frame_buffer_.push_back(fd);
+
+    // Keep buffer size limited
+    while (frame_buffer_.size() > BUFFER_SIZE) {
+      frame_buffer_.pop_front();
+      // Adjust pending index if we removed elements
+      if (has_pending_minimum_ && pending_min_index_ > 0) {
+        pending_min_index_--;
+      } else if (has_pending_minimum_ && pending_min_index_ <= 0) {
+        // Lost the pending minimum due to buffer overflow
+        has_pending_minimum_ = false;
+        pending_min_index_ = -1;
+        frames_since_minimum_ = 0;
+      }
+    }
+
+    // Need at least 2 frames to detect trend
+    if (frame_buffer_.size() < 2) {
       last_new_z_ = current_z;
       return;
     }
 
-    // Determine current trend: is Z descending or ascending?
-    bool is_descending = (current_z < last_new_z_);
-    bool is_ascending = (current_z > last_new_z_);
+    // Noise threshold for significant movement
+    constexpr double noise_threshold = 150.0;
 
-    // Detect local minimum: was descending, now ascending
-    // Use a small threshold to avoid noise (e.g., 5mm)
-    const double noise_threshold = 5.0;
-    bool significant_descent = (last_new_z_ - current_z) > noise_threshold;
-    bool significant_ascent = (current_z - last_new_z_) > noise_threshold;
+    // Check if we have a pending minimum to confirm
+    if (has_pending_minimum_) {
+      frames_since_minimum_++;
 
-    if (was_descending_ && is_ascending && significant_ascent) {
-      // Found a local minimum! The previous point was the landing point
-      double landing_z = last_new_z_;
+      // Check if current Z is still higher than the pending minimum (confirming upward trend)
+      double min_z = frame_buffer_[pending_min_index_].z;
+      bool still_ascending = (current_z > min_z + noise_threshold * 0.5);
 
-      // Calculate time since start
-      auto now = std::chrono::steady_clock::now();
-      auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-          now - start_time_).count();
-      int total_seconds = static_cast<int>(elapsed_ms / 1000);
-      int minutes = total_seconds / 60;
-      int seconds = total_seconds % 60;
+      if (still_ascending && frames_since_minimum_ >= static_cast<int>(CONFIRM_FRAMES)) {
+        // Confirmed! Calculate weighted average and record landing point
+        ConfirmLandingPoint();
+        has_pending_minimum_ = false;
+        pending_min_index_ = -1;
+        frames_since_minimum_ = 0;
+        was_descending_ = false;
+      } else if (!still_ascending && current_z < min_z) {
+        // Found a new lower point, update pending minimum
+        pending_min_index_ = static_cast<int>(frame_buffer_.size()) - 1;
+        frames_since_minimum_ = 0;
+      } else if (frames_since_minimum_ > static_cast<int>(BUFFER_SIZE)) {
+        // Timeout, cancel pending minimum
+        has_pending_minimum_ = false;
+        pending_min_index_ = -1;
+        frames_since_minimum_ = 0;
+      }
+    } else {
+      // Look for a new potential minimum
+      bool significant_descent = (last_new_z_ - current_z) > noise_threshold;
+      bool is_ascending = (current_z > last_new_z_);
 
-      // Create landing point record
-      landing_count_++;
-      LandingPoint lp;
-      lp.landing_id = landing_count_;
-      lp.time_minutes = minutes;
-      lp.time_seconds = seconds;
-      lp.new_frame_x = hip.new_frame_pos.x;
-      lp.new_frame_y = hip.new_frame_pos.y;
-      lp.new_frame_z = landing_z;
+      if (was_descending_ && is_ascending && (current_z - last_new_z_) > noise_threshold * 0.5) {
+        // Potential minimum detected at previous frame
+        has_pending_minimum_ = true;
+        pending_min_index_ = static_cast<int>(frame_buffer_.size()) - 2;  // Previous frame
+        if (pending_min_index_ < 0) pending_min_index_ = 0;
+        frames_since_minimum_ = 1;
+      }
 
-      landing_points_.push_back(lp);
-
-      // Output to console
-      std::cout << "\n========================================" << std::endl;
-      std::cout << "落点" << lp.landing_id << "：" << std::endl;
-      std::cout << "  时间: " << lp.time_minutes << "分" << lp.time_seconds << "秒" << std::endl;
-      std::cout << "  新坐标系 X: " << std::fixed << std::setprecision(1) << lp.new_frame_x << " mm" << std::endl;
-      std::cout << "  新坐标系 Y: " << std::fixed << std::setprecision(1) << lp.new_frame_y << " mm" << std::endl;
-      std::cout << "  新坐标系 Z (极低点): " << std::fixed << std::setprecision(1) << lp.new_frame_z << " mm" << std::endl;
-      std::cout << "========================================\n" << std::endl;
+      // Update descending flag
+      if (significant_descent) {
+        was_descending_ = true;
+      }
     }
 
-    // Update trend tracking
-    if (significant_descent) {
-      was_descending_ = true;
-    } else if (significant_ascent) {
-      was_descending_ = false;
-    }
-
-    // Update history
-    new_z_history_.push_back(current_z);
-    if (new_z_history_.size() > 10) {
-      new_z_history_.pop_front();
-    }
     last_new_z_ = current_z;
+  }
+
+  /**
+   * Confirm the landing point and calculate weighted average coordinates.
+   * Weight formula: w_i = 1 / (|Z_i - Z_min| + epsilon)
+   * This gives higher weight to frames with Z closer to the minimum.
+   */
+  void ConfirmLandingPoint() {
+    if (pending_min_index_ < 0 || pending_min_index_ >= static_cast<int>(frame_buffer_.size())) {
+      return;
+    }
+
+    // Find the actual minimum Z in the buffer (in case of noise)
+    double min_z = frame_buffer_[pending_min_index_].z;
+    int actual_min_idx = pending_min_index_;
+
+    // Search nearby frames for the actual minimum
+    int search_start = std::max(0, pending_min_index_ - 3);
+    int search_end = std::min(static_cast<int>(frame_buffer_.size()) - 1, pending_min_index_ + 3);
+
+    for (int i = search_start; i <= search_end; i++) {
+      if (frame_buffer_[i].z < min_z) {
+        min_z = frame_buffer_[i].z;
+        actual_min_idx = i;
+      }
+    }
+
+    // Define the window for weighted averaging (7 frames around minimum)
+    constexpr int WINDOW_HALF = 3;
+    int window_start = std::max(0, actual_min_idx - WINDOW_HALF);
+    int window_end = std::min(static_cast<int>(frame_buffer_.size()) - 1, actual_min_idx + WINDOW_HALF);
+
+    // Calculate weighted average
+    constexpr double epsilon = 1.0;  // Prevent division by zero
+    double weight_sum = 0.0;
+    double weighted_x = 0.0;
+    double weighted_y = 0.0;
+
+    for (int i = window_start; i <= window_end; i++) {
+      double z_diff = std::abs(frame_buffer_[i].z - min_z);
+      double weight = 1.0 / (z_diff + epsilon);
+
+      weighted_x += weight * frame_buffer_[i].x;
+      weighted_y += weight * frame_buffer_[i].y;
+      weight_sum += weight;
+    }
+
+    // Calculate final coordinates
+    double final_x = weighted_x / weight_sum;
+    double final_y = weighted_y / weight_sum;
+
+    // Calculate time since start
+    auto min_timestamp = frame_buffer_[actual_min_idx].timestamp;
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        min_timestamp - start_time_).count();
+    int total_seconds = static_cast<int>(elapsed_ms / 1000);
+    int minutes = total_seconds / 60;
+    int seconds = total_seconds % 60;
+
+    // Create landing point record
+    landing_count_++;
+    LandingPoint lp;
+    lp.landing_id = landing_count_;
+    lp.time_minutes = minutes;
+    lp.time_seconds = seconds;
+    lp.new_frame_x = final_x;
+    lp.new_frame_y = final_y;
+    lp.new_frame_z = min_z;
+
+    landing_points_.push_back(lp);
+
+    // Output to console with detailed info
+    std::cout << "\n========================================" << std::endl;
+    std::cout << "落点" << lp.landing_id << " (加权平均)：" << std::endl;
+    std::cout << "  时间: " << lp.time_minutes << "分" << lp.time_seconds << "秒" << std::endl;
+    std::cout << "  新坐标系 X: " << std::fixed << std::setprecision(1) << lp.new_frame_x << " mm" << std::endl;
+    std::cout << "  新坐标系 Y: " << std::fixed << std::setprecision(1) << lp.new_frame_y << " mm" << std::endl;
+    std::cout << "  新坐标系 Z (极低点): " << std::fixed << std::setprecision(1) << lp.new_frame_z << " mm" << std::endl;
+    std::cout << "  采样窗口: " << (window_end - window_start + 1) << " 帧" << std::endl;
+    std::cout << "========================================\n" << std::endl;
   }
 
   // Get landing points for display
@@ -694,6 +801,14 @@ private:
   double last_new_z_ = 0.0;                       // 上一帧的新坐标系Z值
   std::chrono::steady_clock::time_point start_time_;  // 程序启动时间
   bool start_time_initialized_ = false;           // 是否已初始化启动时间
+
+  // Delayed confirmation and weighted averaging variables
+  std::deque<FrameData> frame_buffer_;            // 帧数据缓冲区（存储最近N帧）
+  static constexpr size_t BUFFER_SIZE = 15;       // 缓冲区大小（前后各7帧 + 1个极低点）
+  static constexpr size_t CONFIRM_FRAMES = 5;     // 确认所需的上升帧数
+  int pending_min_index_ = -1;                    // 待确认的极低点在缓冲区中的索引
+  bool has_pending_minimum_ = false;              // 是否有待确认的极低点
+  int frames_since_minimum_ = 0;                  // 自极低点以来的帧数
 };
 
 void OnDepthMouseCallback(int event, int x, int y, int flags, void *userdata) {
