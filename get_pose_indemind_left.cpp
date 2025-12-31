@@ -205,6 +205,24 @@ public:
       y_offset += line_height;
     }
 
+    // Display current detection parameters
+    y_offset += 10;
+    cv::putText(im, "=== Detection Parameters ===", cv::Point(10, y_offset),
+                cv::FONT_HERSHEY_PLAIN, 1.3, cv::Scalar(128, 0, 128), 2);
+    y_offset += line_height;
+
+    std::ostringstream param_str1;
+    param_str1 << "Z Threshold: " << std::fixed << std::setprecision(0) << noise_threshold_ << " mm  (+/-)";
+    cv::putText(im, param_str1.str(), cv::Point(10, y_offset),
+                cv::FONT_HERSHEY_PLAIN, 1.2, cv::Scalar(80, 80, 80), 1);
+    y_offset += line_height;
+
+    std::ostringstream param_str2;
+    param_str2 << "Window: " << window_half_ << " frames (" << (2 * window_half_ + 1) << " total)  ([/])";
+    cv::putText(im, param_str2.str(), cv::Point(10, y_offset),
+                cv::FONT_HERSHEY_PLAIN, 1.2, cv::Scalar(80, 80, 80), 1);
+    y_offset += line_height;
+
     // Display hip coordinates for all detected persons
     if (!hip_data_.empty()) {
       y_offset += 10;
@@ -576,8 +594,8 @@ public:
       return;
     }
 
-    // Noise threshold for significant movement
-    constexpr double noise_threshold = 150.0;
+    // Use member variable for noise threshold (adjustable at runtime)
+    double noise_threshold = noise_threshold_;
 
     // Check if we have a pending minimum to confirm
     if (has_pending_minimum_) {
@@ -651,10 +669,9 @@ public:
       }
     }
 
-    // Define the window for weighted averaging (7 frames around minimum)
-    constexpr int WINDOW_HALF = 3;
-    int window_start = std::max(0, actual_min_idx - WINDOW_HALF);
-    int window_end = std::min(static_cast<int>(frame_buffer_.size()) - 1, actual_min_idx + WINDOW_HALF);
+    // Define the window for weighted averaging (use member variable)
+    int window_start = std::max(0, actual_min_idx - window_half_);
+    int window_end = std::min(static_cast<int>(frame_buffer_.size()) - 1, actual_min_idx + window_half_);
 
     // Calculate weighted average
     constexpr double epsilon = 1.0;  // Prevent division by zero
@@ -710,6 +727,41 @@ public:
   const std::vector<LandingPoint>& GetLandingPoints() const {
     return landing_points_;
   }
+
+  // Parameter adjustment methods
+  void IncreaseNoiseThreshold(double delta = 10.0) {
+    noise_threshold_ += delta;
+    if (noise_threshold_ > 500.0) noise_threshold_ = 500.0;
+    std::cout << "[参数调整] Z阈值: " << noise_threshold_ << " mm" << std::endl;
+  }
+
+  void DecreaseNoiseThreshold(double delta = 10.0) {
+    noise_threshold_ -= delta;
+    if (noise_threshold_ < 10.0) noise_threshold_ = 10.0;
+    std::cout << "[参数调整] Z阈值: " << noise_threshold_ << " mm" << std::endl;
+  }
+
+  void IncreaseWindowHalf(int delta = 1) {
+    window_half_ += delta;
+    if (window_half_ > 7) window_half_ = 7;
+    std::cout << "[参数调整] 窗口半径: " << window_half_ << " 帧 (共" << (2 * window_half_ + 1) << "帧)" << std::endl;
+  }
+
+  void DecreaseWindowHalf(int delta = 1) {
+    window_half_ -= delta;
+    if (window_half_ < 1) window_half_ = 1;
+    std::cout << "[参数调整] 窗口半径: " << window_half_ << " 帧 (共" << (2 * window_half_ + 1) << "帧)" << std::endl;
+  }
+
+  void PrintParameters() const {
+    std::cout << "\n=== 当前落点检测参数 ===" << std::endl;
+    std::cout << "  Z阈值: " << noise_threshold_ << " mm" << std::endl;
+    std::cout << "  窗口半径: " << window_half_ << " 帧 (共" << (2 * window_half_ + 1) << "帧参与加权平均)" << std::endl;
+    std::cout << "========================\n" << std::endl;
+  }
+
+  double GetNoiseThreshold() const { return noise_threshold_; }
+  int GetWindowHalf() const { return window_half_; }
 
   // Draw Z-coordinate fluctuation curve
   void DrawFluctuationCurve(cv::Mat &im, int start_y) {
@@ -809,6 +861,10 @@ private:
   int pending_min_index_ = -1;                    // 待确认的极低点在缓冲区中的索引
   bool has_pending_minimum_ = false;              // 是否有待确认的极低点
   int frames_since_minimum_ = 0;                  // 自极低点以来的帧数
+
+  // Adjustable parameters (can be changed at runtime)
+  double noise_threshold_ = 150.0;                // Z坐标变化阈值 (mm)
+  int window_half_ = 3;                           // 加权平均窗口半径 (帧数)
 };
 
 void OnDepthMouseCallback(int event, int x, int y, int flags, void *userdata) {
@@ -969,7 +1025,10 @@ int main(int argc, char **argv) {
   std::cout << "  s       : Toggle skeleton" << std::endl;
   std::cout << "  i       : Toggle info overlay" << std::endl;
   std::cout << "  l       : Toggle data recording (Start/Stop)" << std::endl;
-  std::cout << "  SPACE   : Save current frame\n" << std::endl;
+  std::cout << "  SPACE   : Save current frame" << std::endl;
+  std::cout << "  + / -   : Increase/Decrease Z threshold" << std::endl;
+  std::cout << "  [ / ]   : Decrease/Increase window radius" << std::endl;
+  std::cout << "  p       : Print current parameters\n" << std::endl;
 
   // Display options
   bool show_bbox = true;
@@ -1266,6 +1325,21 @@ int main(int argc, char **argv) {
         cv::imwrite(filename.str(), left_image);
         std::cout << "Saved: " << filename.str() << std::endl;
       }
+    } else if (key == '+' || key == '=') {
+      // Increase Z threshold
+      depth_region.IncreaseNoiseThreshold();
+    } else if (key == '-' || key == '_') {
+      // Decrease Z threshold
+      depth_region.DecreaseNoiseThreshold();
+    } else if (key == ']' || key == '}') {
+      // Increase window half
+      depth_region.IncreaseWindowHalf();
+    } else if (key == '[' || key == '{') {
+      // Decrease window half
+      depth_region.DecreaseWindowHalf();
+    } else if (key == 'p' || key == 'P') {
+      // Print current parameters
+      depth_region.PrintParameters();
     }
   }
 
