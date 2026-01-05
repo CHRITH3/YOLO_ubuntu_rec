@@ -1,0 +1,57 @@
+/home/chris4/IDE/clion-2025.3.1/bin/cmake/linux/x64/bin/cmake -DCMAKE_MAKE_PROGRAM=/home/chris4/IDE/clion-2025.3.1/bin/ninja/linux/x64/ninja -G Ninja -S "/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴" -B "/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴"
+-- The C compiler identification is GNU 11.4.0
+-- The CXX compiler identification is GNU 11.4.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- =========================================
+--   YOLO Pose Detection Standalone Build
+-- =========================================
+-- Build type: Release
+-- Project directory: /home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴
+-- Platform: Linux
+-- CXX Flags:  -Wall -Wextra
+-- Found OpenCV: /usr/local (found version "3.4.3")
+-- ✓ Found OpenCV: 3.4.3
+--   Include: /usr/local/include;/usr/local/include/opencv
+--   Libraries: opencv_calib3d;opencv_core;opencv_dnn;opencv_features2d;opencv_flann;opencv_highgui;opencv_imgcodecs;opencv_imgproc;opencv_ml;opencv_objdetect;opencv_photo;opencv_shape;opencv_stitching;opencv_superres;opencv_video;opencv_videoio;opencv_videostab
+-- ✓ Found ONNX Runtime
+--   Include: /usr/local/include/onnxruntime
+--   Library: /usr/local/lib/libonnxruntime.so
+-- ✓ Found IMSEE SDK
+--   Include: /home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/include
+--   Library: /home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/lib/libindemind.so
+-- =========================================
+--   Build Configuration Summary
+-- =========================================
+-- Executables:
+--   1. yolo_pose_detection       (INDEMIND RGB+Depth)
+--   2. yolo_pose_indemind_left   (INDEMIND RGB only)
+--   3. yolo_pose_rgb_only        (Webcam/Video/Image)
+-- Output directory: /home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/build
+-- 
+-- Dependencies:
+--   ✓ OpenCV 3.4.3
+--   ✓ ONNX Runtime
+--   ✓ IMSEE SDK (for programs 1 & 2)
+-- 
+-- To build:
+--   mkdir -p build && cd build
+--   cmake ..
+--   make
+-- 
+-- To run:
+--   sudo ./build/yolo_pose_detection          (INDEMIND RGB+Depth)
+--   sudo ./build/yolo_pose_indemind_left      (INDEMIND RGB only)
+--   ./build/yolo_pose_rgb_only                (Webcam/Video/Image)
+-- =========================================
+-- Configuring done (0.3s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴

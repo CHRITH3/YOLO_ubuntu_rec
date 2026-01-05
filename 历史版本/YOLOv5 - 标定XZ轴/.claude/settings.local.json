@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(g++:*)",
+      "Bash(./test2)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

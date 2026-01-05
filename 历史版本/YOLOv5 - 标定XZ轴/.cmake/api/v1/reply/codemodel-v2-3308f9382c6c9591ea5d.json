@@ -1,0 +1,79 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Release-89fc62c6e0eb3b24fa61.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.10"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "Release",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "YOLOPoseDetection",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "yolo_pose_detection::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-yolo_pose_detection-Release-3eefc53949dd9256cb04.json",
+					"name" : "yolo_pose_detection",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "yolo_pose_indemind_left::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-yolo_pose_indemind_left-Release-016ec0a7575803114210.json",
+					"name" : "yolo_pose_indemind_left",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "yolo_pose_rgb_only::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-yolo_pose_rgb_only-Release-215a1a28f7bea5679a20.json",
+					"name" : "yolo_pose_rgb_only",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/chris4/workspace/from_win/2 \u5de5\u7a0b/\u5386\u53f2\u7248\u672c 1215/YOLOv5 - \u6807\u5b9aXZ\u8f74",
+		"source" : "/home/chris4/workspace/from_win/2 \u5de5\u7a0b/\u5386\u53f2\u7248\u672c 1215/YOLOv5 - \u6807\u5b9aXZ\u8f74"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 8
+	}
+}
