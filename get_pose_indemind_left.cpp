@@ -9,16 +9,21 @@
 #include "imrsdk.h"
 #include "logging.h"
 #include "types.h"
+
 #include "yolo_pose_detector.h"
 #include "pose_utils.h"
+
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
+
 #include <queue>
 #include <mutex>
 #include <iomanip>
 #include <sstream>
 #include <chrono>
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <deque>
 
@@ -33,6 +38,33 @@ using namespace indem;
 #define MAX_QUEUE_SIZE 2
 
 static cv::Mat cv_in_left, cv_in_left_inv;
+
+// Robust depth sampling (median in a local window), ignoring invalid depth
+// 深度中值
+static bool RobustDepthMedianU16(const cv::Mat& depth_mm, int x, int y, int r,
+                                uint16_t& out_mm) {
+    if (depth_mm.empty() || depth_mm.type() != CV_16UC1) return false;
+    std::vector<uint16_t> vals;
+    vals.reserve((2 * r + 1) * (2 * r + 1));
+    for (int dy = -r; dy <= r; ++dy) {
+        int yy = y + dy;
+        if (yy < 0 || yy >= depth_mm.rows) continue;
+        const uint16_t* row = depth_mm.ptr<uint16_t>(yy);
+        for (int dx = -r; dx <= r; ++dx) {
+            int xx = x + dx;
+            if (xx < 0 || xx >= depth_mm.cols) continue;
+            uint16_t z = row[xx];
+            // filter invalid (0) / out-of-range
+            if (z == 0 || z >= 10000) continue;
+            vals.push_back(z);
+          }
+      }
+    if (vals.size() < 6) return false;  // too few valid samples
+    std::nth_element(vals.begin(), vals.begin() + vals.size() / 2, vals.end());
+    out_mm = vals[vals.size() / 2];
+    return true;
+  }
+
 
 // DepthRegion class for mouse interaction to display region depth information
 class DepthRegion {
@@ -111,7 +143,15 @@ public:
     mouse_img_cor.at<double>(0, 0) = static_cast<double>(point_.x);
     mouse_img_cor.at<double>(1, 0) = static_cast<double>(point_.y);
     mouse_img_cor.at<double>(2, 0) = 1.0;
-    double Z = depth.at<T>(point_.y, point_.x);
+    // double Z = depth.at<T>(point_.y, point_.x);
+        // Use robust depth for cursor readout to reduce jitter/noise
+        uint16_t z_mm = 0;
+        if (!RobustDepthMedianU16(depth, point_.x, point_.y, /*r=*/3, z_mm)) {
+            // If invalid, skip drawing numeric 3D info for this cursor location
+            return;
+          }
+        double Z = static_cast<double>(z_mm);
+
     mouse_left_cor = cv_in_left_inv * Z * mouse_img_cor;
 
     double x = mouse_left_cor.at<double>(0, 0);
@@ -528,6 +568,61 @@ public:
     std::chrono::steady_clock::time_point timestamp;  // 帧时间戳
   };
 
+    // Simple adaptive EMA filter for 3D points
+  struct EMA3 {
+        bool init = false;
+        cv::Point3d v{0, 0, 0};
+        double fc = 6.0;  // cutoff frequency (Hz)
+        cv::Point3d Step(const cv::Point3d& x, double dt_sec) {
+            if (!init) {
+                v = x;
+                init = true;
+                return v;
+              }
+            if (dt_sec <= 0) dt_sec = 1.0 / 50.0;
+            double a = 1.0 - std::exp(-2.0 * M_PI * fc * dt_sec);
+            v = v + a * (x - v);
+            return v;
+          }
+        void Reset() { init = false; v = cv::Point3d(0, 0, 0); }
+      };
+
+    void ResetLandingState(bool reset_filter = false) {
+        was_descending_ = false;
+        has_pending_minimum_ = false;
+        pending_min_index_ = -1;
+        frames_since_minimum_ = 0;
+        frame_buffer_.clear();
+        last_new_z_ = 0.0;
+        if (reset_filter) {
+            ema_new_frame_.Reset();
+            filter_time_initialized_ = false;
+          }
+      }
+
+    // Pick a stable target (avoid poses ordering jitter): choose hip closest to last tracked cam pos
+    int PickTrackedHipIndex(const std::vector<HipInfo>& hips) {
+        if (hips.empty()) return -1;
+        int best = 0;
+        if (!has_last_track_) {
+            return 0;
+          }
+        double best_d2 = std::numeric_limits<double>::infinity();
+        for (int i = 0; i < (int)hips.size(); ++i) {
+            const auto& p = hips[i].camera_pos;
+            double dx = p.x - last_track_cam_pos_.x;
+            double dy = p.y - last_track_cam_pos_.y;
+            double dz = p.z - last_track_cam_pos_.z;
+            double d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 < best_d2) {
+                best_d2 = d2;
+                best = i;
+              }
+          }
+        return best;
+      }
+
+
   // Update hip data for all detected persons
   void UpdateHipData(const std::vector<HipInfo> &hip_data) {
     hip_data_ = hip_data;
@@ -538,18 +633,68 @@ public:
       start_time_initialized_ = true;
     }
 
-    // Update history for curve plotting (track first person's Z coordinate)
-    if (!hip_data.empty()) {
-      z_history_.push_back(hip_data[0].camera_pos.z);
-      if (z_history_.size() > max_history_size_) {
-        z_history_.pop_front();
-      }
+    // // Update history for curve plotting (track first person's Z coordinate)
+    // if (!hip_data.empty()) {
+    //   z_history_.push_back(hip_data[0].camera_pos.z);
+    //   if (z_history_.size() > max_history_size_) {
+    //     z_history_.pop_front();
+    //   }
+    //
+    //   // Check for landing point in new coordinate system Z
+    //   if (hip_data[0].has_new_frame) {
+    //     CheckLandingPoint(hip_data[0]);
+    //   }
+    // }
+      // Missing frames handling: if we lose hip for several frames, reset trend state to avoid false triggers
+      //丢帧复位
+          if (hip_data.empty()) {
+              missing_frames_++;
+              if (missing_frames_ >= kMissingResetFrames) {
+                  ResetLandingState(/*reset_filter=*/true);
+                  missing_frames_ = kMissingResetFrames; // clamp
+                  has_last_track_ = false;
+                }
+              return;
+            }
+          missing_frames_ = 0;
 
-      // Check for landing point in new coordinate system Z
-      if (hip_data[0].has_new_frame) {
-        CheckLandingPoint(hip_data[0]);
-      }
-    }
+          // Choose stable target hip (avoid ordering jitter)
+          int idx = PickTrackedHipIndex(hip_data);
+          if (idx < 0) return;
+
+          HipInfo tracked = hip_data[idx];
+          last_track_cam_pos_ = tracked.camera_pos;
+          has_last_track_ = true;
+
+          // Filter new-frame 3D to reduce jitter/noise (Z axis is upward-positive)
+          if (tracked.has_new_frame) {
+              auto now = std::chrono::steady_clock::now();
+              double dt = 1.0 / 50.0;
+              if (!filter_time_initialized_) {
+                  last_filter_time_ = now;
+                  filter_time_initialized_ = true;
+                } else {
+                    dt = std::chrono::duration_cast<std::chrono::duration<double>>(now - last_filter_time_).count();
+                    last_filter_time_ = now;
+                  }
+              tracked.new_frame_pos = ema_new_frame_.Step(tracked.new_frame_pos, dt);
+            }
+
+          // Update history for curve plotting
+          // Prefer filtered new-frame Z when available; otherwise use camera Z.
+          if (tracked.has_new_frame) {
+              z_history_.push_back(tracked.new_frame_pos.z);
+            } else {
+                z_history_.push_back(tracked.camera_pos.z);
+              }
+          if (z_history_.size() > max_history_size_) {
+              z_history_.pop_front();
+            }
+
+          // Check for landing point in new coordinate system Z (filtered)
+          if (tracked.has_new_frame) {
+              CheckLandingPoint(tracked);
+            }
   }
 
   /**
@@ -700,6 +845,20 @@ public:
     int minutes = total_seconds / 60;
     int seconds = total_seconds % 60;
 
+
+          // Enforce minimum interval between landing points (debounce)
+          // User requirement: 400ms
+          if (last_landing_time_initialized_) {
+              auto delta_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                  min_timestamp - last_landing_time_).count();
+              if (delta_ms < kMinLandingIntervalMs) {
+                  // Update last_landing_time_ to suppress rapid retriggers
+                  last_landing_time_ = min_timestamp;
+                  return;
+                }
+            }
+          last_landing_time_ = min_timestamp;
+          last_landing_time_initialized_ = true;
     // Create landing point record
     landing_count_++;
     LandingPoint lp;
@@ -731,7 +890,7 @@ public:
   // Parameter adjustment methods
   void IncreaseNoiseThreshold(double delta = 10.0) {
     noise_threshold_ += delta;
-    if (noise_threshold_ > 500.0) noise_threshold_ = 500.0;
+    if (noise_threshold_ > 2000.0) noise_threshold_ = 2000.0;
     std::cout << "[参数调整] Z阈值: " << noise_threshold_ << " mm" << std::endl;
   }
 
@@ -862,8 +1021,26 @@ private:
   bool has_pending_minimum_ = false;              // 是否有待确认的极低点
   int frames_since_minimum_ = 0;                  // 自极低点以来的帧数
 
+    // Debounce / stability helpers
+  static constexpr int kMinLandingIntervalMs = 400;     // 落点最小间隔（ms）
+    std::chrono::steady_clock::time_point last_landing_time_;
+    bool last_landing_time_initialized_ = false;
+
+    // Missing frames reset
+    int missing_frames_ = 0;
+    static constexpr int kMissingResetFrames = 3;         // 连续丢失N帧后复位趋势状态，可调
+
+    // Target tracking (avoid poses ordering jitter)
+    bool has_last_track_ = false;
+    cv::Point3d last_track_cam_pos_{0, 0, 0};
+
+    // New-frame EMA filter
+    EMA3 ema_new_frame_;
+    bool filter_time_initialized_ = false;
+    std::chrono::steady_clock::time_point last_filter_time_;
+
   // Adjustable parameters (can be changed at runtime)
-  double noise_threshold_ = 150.0;                // Z坐标变化阈值 (mm)
+  double noise_threshold_ = 1500.0;                // Z坐标变化阈值 (mm)
   int window_half_ = 3;                           // 加权平均窗口半径 (帧数)
 };
 
@@ -1163,41 +1340,128 @@ int main(int argc, char **argv) {
       if (!depth_data.empty() && !poses.empty()) {
         int person_id = 1;
         for (const auto& pose : poses) {
-          if (pose.keypoints.size() > 11) {
-            const auto& left_hip = pose.keypoints[11];
+          // if (pose.keypoints.size() > 11) {
+          //   const auto& left_hip = pose.keypoints[11];
+          //
+          //   if (left_hip.confidence > 0.6f) {
+          //     int px = static_cast<int>(left_hip.x);
+          //     int py = static_cast<int>(left_hip.y);
+          //
+          //     if (px >= 0 && px < depth_data.cols && py >= 0 && py < depth_data.rows) {
+          //       double Z = depth_data.at<ushort>(py, px);
+          //
+          //       if (Z > 0 && Z < 10000) {
+          //         // Calculate 3D coordinates in camera coordinate system
+          //         cv::Mat kp_img_cor(3, 1, CV_64FC1);
+          //         kp_img_cor.at<double>(0, 0) = static_cast<double>(px);
+          //         kp_img_cor.at<double>(1, 0) = static_cast<double>(py);
+          //         kp_img_cor.at<double>(2, 0) = 1.0;
+          //
+          //         cv::Mat kp_camera_cor = cv_in_left_inv * Z * kp_img_cor;
+          //
+          //         double X = kp_camera_cor.at<double>(0, 0);
+          //         double Y = kp_camera_cor.at<double>(1, 0);
+          //         double Z_val = kp_camera_cor.at<double>(2, 0);
+          //
+          //         // Create hip info
+          //         DepthRegion::HipInfo hip_info;
+          //         hip_info.person_id = person_id;
+          //         hip_info.camera_pos = cv::Point3d(X, Y, Z_val);
+          //         hip_info.has_new_frame = depth_region.IsCoordSystemReady();
+          //
+          //         if (hip_info.has_new_frame) {
+          //           hip_info.new_frame_pos = depth_region.TransformToNewFrame(hip_info.camera_pos);
+          //         }
+          //
+          //         hip_data_list.push_back(hip_info);
+          //       }
+          //     }
+          //   }
+          // }
 
-            if (left_hip.confidence > 0.6f) {
+          // Use pelvis point (avg of L/R hip) for stability: keypoints 11 & 12
+          //髋部左右平均
+          if (pose.keypoints.size() > 12) {
+            const auto& lh = pose.keypoints[11];
+            const auto& rh = pose.keypoints[12];
+
+            bool lh_ok = lh.confidence > 0.50f;
+            bool rh_ok = rh.confidence > 0.50f;
+            if (!lh_ok && !rh_ok) { person_id++; continue; }
+
+            int px = 0, py = 0;
+            if (lh_ok && rh_ok) {
+              px = static_cast<int>(0.5f * (lh.x + rh.x));
+              py = static_cast<int>(0.5f * (lh.y + rh.y));
+            } else if (lh_ok) {
+              px = static_cast<int>(lh.x);
+              py = static_cast<int>(lh.y);
+            } else {
+              px = static_cast<int>(rh.x);
+              py = static_cast<int>(rh.y);
+            }
+
+            if (px >= 0 && px < depth_data.cols && py >= 0 && py < depth_data.rows) {
+              // Robust depth sampling (median over local window)
+              uint16_t z_mm = 0;
+              if (!RobustDepthMedianU16(depth_data, px, py, /*r=*/3, z_mm)) {
+                person_id++;
+                continue;
+              }
+              double Z = static_cast<double>(z_mm);  // mm
+
+              // Calculate 3D coordinates in camera coordinate system
+              cv::Mat kp_img_cor(3, 1, CV_64FC1);
+              kp_img_cor.at<double>(0, 0) = static_cast<double>(px);
+              kp_img_cor.at<double>(1, 0) = static_cast<double>(py);
+              kp_img_cor.at<double>(2, 0) = 1.0;
+
+              cv::Mat kp_camera_cor = cv_in_left_inv * Z * kp_img_cor;
+
+              double X = kp_camera_cor.at<double>(0, 0);
+              double Y = kp_camera_cor.at<double>(1, 0);
+              double Z_val = kp_camera_cor.at<double>(2, 0);
+
+              // Create hip info
+              DepthRegion::HipInfo hip_info;
+              hip_info.person_id = person_id;
+              hip_info.camera_pos = cv::Point3d(X, Y, Z_val);
+              hip_info.has_new_frame = depth_region.IsCoordSystemReady();
+
+              if (hip_info.has_new_frame) {
+                hip_info.new_frame_pos = depth_region.TransformToNewFrame(hip_info.camera_pos);
+              }
+
+              hip_data_list.push_back(hip_info);
+            }
+          } else if (pose.keypoints.size() > 11) {
+            // Fallback: only left hip exists (older models / configs)
+            const auto& left_hip = pose.keypoints[11];
+            if (left_hip.confidence > 0.60f) {
               int px = static_cast<int>(left_hip.x);
               int py = static_cast<int>(left_hip.y);
-
               if (px >= 0 && px < depth_data.cols && py >= 0 && py < depth_data.rows) {
-                double Z = depth_data.at<ushort>(py, px);
-
-                if (Z > 0 && Z < 10000) {
-                  // Calculate 3D coordinates in camera coordinate system
-                  cv::Mat kp_img_cor(3, 1, CV_64FC1);
-                  kp_img_cor.at<double>(0, 0) = static_cast<double>(px);
-                  kp_img_cor.at<double>(1, 0) = static_cast<double>(py);
-                  kp_img_cor.at<double>(2, 0) = 1.0;
-
-                  cv::Mat kp_camera_cor = cv_in_left_inv * Z * kp_img_cor;
-
-                  double X = kp_camera_cor.at<double>(0, 0);
-                  double Y = kp_camera_cor.at<double>(1, 0);
-                  double Z_val = kp_camera_cor.at<double>(2, 0);
-
-                  // Create hip info
-                  DepthRegion::HipInfo hip_info;
-                  hip_info.person_id = person_id;
-                  hip_info.camera_pos = cv::Point3d(X, Y, Z_val);
-                  hip_info.has_new_frame = depth_region.IsCoordSystemReady();
-
-                  if (hip_info.has_new_frame) {
-                    hip_info.new_frame_pos = depth_region.TransformToNewFrame(hip_info.camera_pos);
-                  }
-
-                  hip_data_list.push_back(hip_info);
+                uint16_t z_mm = 0;
+                if (!RobustDepthMedianU16(depth_data, px, py, /*r=*/3, z_mm)) {
+                  person_id++;
+                  continue;
                 }
+                double Z = static_cast<double>(z_mm);
+                cv::Mat kp_img_cor(3, 1, CV_64FC1);
+                kp_img_cor.at<double>(0, 0) = static_cast<double>(px);
+                kp_img_cor.at<double>(1, 0) = static_cast<double>(py);
+                kp_img_cor.at<double>(2, 0) = 1.0;
+                cv::Mat kp_camera_cor = cv_in_left_inv * Z * kp_img_cor;
+                DepthRegion::HipInfo hip_info;
+                hip_info.person_id = person_id;
+                hip_info.camera_pos = cv::Point3d(kp_camera_cor.at<double>(0,0),
+                                                  kp_camera_cor.at<double>(1,0),
+                                                  kp_camera_cor.at<double>(2,0));
+                hip_info.has_new_frame = depth_region.IsCoordSystemReady();
+                if (hip_info.has_new_frame) {
+                  hip_info.new_frame_pos = depth_region.TransformToNewFrame(hip_info.camera_pos);
+                }
+                hip_data_list.push_back(hip_info);
               }
             }
           }
