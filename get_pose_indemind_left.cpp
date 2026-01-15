@@ -39,6 +39,106 @@ using namespace indem;
 
 static cv::Mat cv_in_left, cv_in_left_inv;
 
+// Runtime flags for controlling recording behavior
+struct RuntimeFlags {
+  bool record_enabled = false;  // 录制开关，默认关闭
+};
+static RuntimeFlags g_runtime_flags;
+
+// Data session for recording
+struct DataSession {
+  std::string session_id;           // 会话ID (时间戳格式)
+  std::string output_dir;           // 输出目录路径
+  std::chrono::system_clock::time_point start_time;  // 会话开始时间
+  bool active = false;              // 会话是否激活
+};
+static DataSession g_current_session;
+
+// Create a new data session
+static bool CreateNewSession() {
+  auto now = std::chrono::system_clock::now();
+  auto now_time = std::chrono::system_clock::to_time_t(now);
+
+  std::ostringstream session_id;
+  session_id << std::put_time(std::localtime(&now_time), "%Y%m%d_%H%M%S");
+
+  g_current_session.session_id = session_id.str();
+  g_current_session.output_dir = "runs/" + session_id.str();
+  g_current_session.start_time = now;
+  g_current_session.active = true;
+
+  // Create directory
+  std::string mkdir_cmd = "mkdir -p " + g_current_session.output_dir;
+  int ret = system(mkdir_cmd.c_str());
+
+  if (ret == 0) {
+    std::cout << "[Session] 新会话已创建: " << g_current_session.output_dir << std::endl;
+    return true;
+  } else {
+    std::cerr << "[Session] 创建目录失败: " << g_current_session.output_dir << std::endl;
+    g_current_session.active = false;
+    return false;
+  }
+}
+
+// Performance timing statistics
+struct PerfStats {
+  std::deque<double> inference_ms;
+  std::deque<double> depth_map_ms;
+  std::deque<double> landing_detect_ms;
+  static constexpr size_t MAX_SAMPLES = 100;
+  std::chrono::steady_clock::time_point last_print_time;
+  bool initialized = false;
+
+  void AddInference(double ms) {
+    inference_ms.push_back(ms);
+    if (inference_ms.size() > MAX_SAMPLES) inference_ms.pop_front();
+  }
+
+  void AddDepthMap(double ms) {
+    depth_map_ms.push_back(ms);
+    if (depth_map_ms.size() > MAX_SAMPLES) depth_map_ms.pop_front();
+  }
+
+  void AddLandingDetect(double ms) {
+    landing_detect_ms.push_back(ms);
+    if (landing_detect_ms.size() > MAX_SAMPLES) landing_detect_ms.pop_front();
+  }
+
+  void PrintIfNeeded() {
+    auto now = std::chrono::steady_clock::now();
+    if (!initialized) {
+      last_print_time = now;
+      initialized = true;
+      return;
+    }
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_print_time).count();
+    if (elapsed >= 2) {
+      PrintStats();
+      last_print_time = now;
+    }
+  }
+
+  void PrintStats() {
+    auto calc_stats = [](const std::deque<double>& data) -> std::pair<double, double> {
+      if (data.empty()) return {0, 0};
+      double sum = 0, max_val = 0;
+      for (double v : data) { sum += v; if (v > max_val) max_val = v; }
+      return {sum / data.size(), max_val};
+    };
+
+    auto [inf_avg, inf_max] = calc_stats(inference_ms);
+    auto [dep_avg, dep_max] = calc_stats(depth_map_ms);
+    auto [land_avg, land_max] = calc_stats(landing_detect_ms);
+
+    std::cout << "[Perf] Inference: " << std::fixed << std::setprecision(1)
+              << inf_avg << "/" << inf_max << "ms"
+              << " | Depth: " << dep_avg << "/" << dep_max << "ms"
+              << " | Landing: " << land_avg << "/" << land_max << "ms" << std::endl;
+  }
+};
+static PerfStats g_perf_stats;
+
 // Robust depth sampling (median in a local window), ignoring invalid depth
 // 深度中值
 static bool RobustDepthMedianU16(const cv::Mat& depth_mm, int x, int y, int r,
@@ -555,6 +655,7 @@ public:
     int landing_id;           // 落点编号 (从1开始)
     int time_minutes;         // 时间-分钟部分
     int time_seconds;         // 时间-秒部分
+    int64_t t_ms_since_start; // 精确时间戳（毫秒，从程序启动开始）
     double new_frame_x;       // 新坐标系X坐标
     double new_frame_y;       // 新坐标系Y坐标
     double new_frame_z;       // 新坐标系Z坐标（极低点值）
@@ -859,26 +960,47 @@ public:
             }
           last_landing_time_ = min_timestamp;
           last_landing_time_initialized_ = true;
+
     // Create landing point record
-    landing_count_++;
     LandingPoint lp;
-    lp.landing_id = landing_count_;
     lp.time_minutes = minutes;
     lp.time_seconds = seconds;
+    lp.t_ms_since_start = elapsed_ms;  // 精确时间戳
     lp.new_frame_x = final_x;
     lp.new_frame_y = final_y;
     lp.new_frame_z = min_z;
+    lp.landing_id = 0;  // Will be assigned if recorded
 
-    landing_points_.push_back(lp);
+    // Record the landing point (decides whether to store based on record_enabled)
+    RecordLandingPoint(lp, window_end - window_start + 1);
+  }
 
-    // Output to console with detailed info
-    std::cout << "\n========================================" << std::endl;
-    std::cout << "落点" << lp.landing_id << " (加权平均)：" << std::endl;
-    std::cout << "  时间: " << lp.time_minutes << "分" << lp.time_seconds << "秒" << std::endl;
+  /**
+   * Record a landing point - decides whether to store based on record_enabled flag.
+   * This function is decoupled from ConfirmLandingPoint() for flexibility.
+   */
+  void RecordLandingPoint(LandingPoint& lp, int window_size) {
+    // Only store landing point if recording is enabled
+    if (g_runtime_flags.record_enabled) {
+      landing_count_++;
+      lp.landing_id = landing_count_;
+      landing_points_.push_back(lp);
+
+      // Output to console with detailed info
+      std::cout << "\n========================================" << std::endl;
+      std::cout << "落点" << lp.landing_id << " (加权平均) [已入库]：" << std::endl;
+    } else {
+      // Output to console - detected but not stored
+      std::cout << "\n========================================" << std::endl;
+      std::cout << "检测到落点 (未入库 - REC OFF)：" << std::endl;
+    }
+
+    std::cout << "  时间: " << lp.time_minutes << "分" << lp.time_seconds << "秒 (t_ms: " << lp.t_ms_since_start << ")" << std::endl;
     std::cout << "  新坐标系 X: " << std::fixed << std::setprecision(1) << lp.new_frame_x << " mm" << std::endl;
     std::cout << "  新坐标系 Y: " << std::fixed << std::setprecision(1) << lp.new_frame_y << " mm" << std::endl;
     std::cout << "  新坐标系 Z (极低点): " << std::fixed << std::setprecision(1) << lp.new_frame_z << " mm" << std::endl;
-    std::cout << "  采样窗口: " << (window_end - window_start + 1) << " 帧" << std::endl;
+    std::cout << "  采样窗口: " << window_size << " 帧" << std::endl;
+    std::cout << "  已入库落点数: " << landing_points_.size() << std::endl;
     std::cout << "========================================\n" << std::endl;
   }
 
@@ -917,6 +1039,52 @@ public:
     std::cout << "  Z阈值: " << noise_threshold_ << " mm" << std::endl;
     std::cout << "  窗口半径: " << window_half_ << " 帧 (共" << (2 * window_half_ + 1) << "帧参与加权平均)" << std::endl;
     std::cout << "========================\n" << std::endl;
+  }
+
+  // Clear all landing points and reset counter
+  void ClearLandingPoints() {
+    landing_points_.clear();
+    landing_count_ = 0;
+    ResetLandingState(true);
+    std::cout << "[录制] 已清空所有落点数据" << std::endl;
+  }
+
+  // Get landing point count
+  size_t GetLandingPointCount() const {
+    return landing_points_.size();
+  }
+
+  // Flush landing points to CSV file
+  bool FlushLandingPoints(const std::string& output_dir) {
+    if (landing_points_.empty()) {
+      std::cout << "[保存] 没有落点数据需要保存" << std::endl;
+      return false;
+    }
+
+    std::string filepath = output_dir + "/landing_points.csv";
+    std::ofstream file(filepath);
+    if (!file.is_open()) {
+      std::cerr << "[保存] 无法打开文件: " << filepath << std::endl;
+      return false;
+    }
+
+    // Write CSV header
+    file << "id,t_ms,new_frame_x,new_frame_y,new_frame_z\n";
+
+    // Write data rows
+    for (const auto& lp : landing_points_) {
+      file << lp.landing_id << ","
+           << lp.t_ms_since_start << ","
+           << std::fixed << std::setprecision(1)
+           << lp.new_frame_x << ","
+           << lp.new_frame_y << ","
+           << lp.new_frame_z << "\n";
+    }
+
+    file.close();
+    std::cout << "[保存] 已保存 " << landing_points_.size()
+              << " 个落点到: " << filepath << std::endl;
+    return true;
   }
 
   double GetNoiseThreshold() const { return noise_threshold_; }
@@ -1022,7 +1190,7 @@ private:
   int frames_since_minimum_ = 0;                  // 自极低点以来的帧数
 
     // Debounce / stability helpers
-  static constexpr int kMinLandingIntervalMs = 400;     // 落点最小间隔（ms）
+  static constexpr int kMinLandingIntervalMs = 600;     // 落点最小间隔（ms）
     std::chrono::steady_clock::time_point last_landing_time_;
     bool last_landing_time_initialized_ = false;
 
@@ -1040,7 +1208,7 @@ private:
     std::chrono::steady_clock::time_point last_filter_time_;
 
   // Adjustable parameters (can be changed at runtime)
-  double noise_threshold_ = 1500.0;                // Z坐标变化阈值 (mm)
+  double noise_threshold_ = 300.0;                // Z坐标变化阈值 (mm)
   int window_half_ = 3;                           // 加权平均窗口半径 (帧数)
 };
 
@@ -1199,13 +1367,17 @@ int main(int argc, char **argv) {
   std::cout << "  q / ESC : Quit" << std::endl;
   std::cout << "  b       : Toggle bounding box" << std::endl;
   std::cout << "  k       : Toggle keypoints" << std::endl;
-  std::cout << "  s       : Toggle skeleton" << std::endl;
+  std::cout << "  t       : Toggle skeleton" << std::endl;
   std::cout << "  i       : Toggle info overlay" << std::endl;
-  std::cout << "  l       : Toggle data recording (Start/Stop)" << std::endl;
+  std::cout << "  l       : Toggle hip coords recording (Start/Stop)" << std::endl;
   std::cout << "  SPACE   : Save current frame" << std::endl;
   std::cout << "  + / -   : Increase/Decrease Z threshold" << std::endl;
   std::cout << "  [ / ]   : Decrease/Increase window radius" << std::endl;
-  std::cout << "  p       : Print current parameters\n" << std::endl;
+  std::cout << "  p       : Print current parameters" << std::endl;
+  std::cout << "  --- Landing Points Recording ---" << std::endl;
+  std::cout << "  r       : Toggle REC (ON: record landing points)" << std::endl;
+  std::cout << "  c       : Clear landing points cache" << std::endl;
+  std::cout << "  s       : Save landing points to CSV\n" << std::endl;
 
   // Display options
   bool show_bbox = true;
@@ -1259,6 +1431,7 @@ int main(int argc, char **argv) {
       auto pose_end = std::chrono::steady_clock::now();
       double inference_time = std::chrono::duration_cast<std::chrono::milliseconds>(
           pose_end - pose_start).count();
+      g_perf_stats.AddInference(inference_time);
 
       if (!poses.empty()) {
         ++pose_count;
@@ -1337,6 +1510,7 @@ int main(int argc, char **argv) {
 
       // Calculate hip coordinates for all detected persons and pass to region window
       std::vector<DepthRegion::HipInfo> hip_data_list;
+      auto depth_start = std::chrono::steady_clock::now();
       if (!depth_data.empty() && !poses.empty()) {
         int person_id = 1;
         for (const auto& pose : poses) {
@@ -1468,9 +1642,18 @@ int main(int argc, char **argv) {
           person_id++;
         }
       }
+      auto depth_end = std::chrono::steady_clock::now();
+      double depth_time = std::chrono::duration_cast<std::chrono::microseconds>(
+          depth_end - depth_start).count() / 1000.0;
+      g_perf_stats.AddDepthMap(depth_time);
 
       // Update hip data in region window
+      auto landing_start = std::chrono::steady_clock::now();
       depth_region.UpdateHipData(hip_data_list);
+      auto landing_end = std::chrono::steady_clock::now();
+      double landing_time = std::chrono::duration_cast<std::chrono::microseconds>(
+          landing_end - landing_start).count() / 1000.0;
+      g_perf_stats.AddLandingDetect(landing_time);
 
       // Record data to CSV if recording is enabled
       if (recording_data && !hip_data_list.empty()) {
@@ -1512,6 +1695,36 @@ int main(int argc, char **argv) {
       // Set mouse callback on YOLO Pose window for depth interaction
       cv::setMouseCallback("YOLO Pose - INDEMIND Left Camera", OnDepthMouseCallback, &depth_region);
 
+      // Display status panel (top-right corner)
+      int panel_x = display.cols - 180;
+      int panel_y = 20;
+      int line_height = 22;
+
+      // REC status
+      std::string rec_status = g_runtime_flags.record_enabled ? "REC: ON" : "REC: OFF";
+      cv::Scalar rec_color = g_runtime_flags.record_enabled ? cv::Scalar(0, 0, 255) : cv::Scalar(128, 128, 128);
+      cv::putText(display, rec_status, cv::Point(panel_x, panel_y),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.6, rec_color, 2);
+
+      // Landing point count
+      panel_y += line_height;
+      std::ostringstream lp_count_str;
+      lp_count_str << "LP: " << depth_region.GetLandingPointCount();
+      cv::putText(display, lp_count_str.str(), cv::Point(panel_x, panel_y),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
+
+      // Last landing point info
+      const auto& lps = depth_region.GetLandingPoints();
+      if (!lps.empty()) {
+        const auto& last_lp = lps.back();
+        panel_y += line_height;
+        std::ostringstream last_str;
+        last_str << "Last: (" << std::fixed << std::setprecision(0)
+                 << last_lp.new_frame_x << "," << last_lp.new_frame_y << "," << last_lp.new_frame_z << ")";
+        cv::putText(display, last_str.str(), cv::Point(panel_x, panel_y),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(200, 200, 200), 1);
+      }
+
       cv::imshow("YOLO Pose - INDEMIND Left Camera", display);
     }
 
@@ -1537,6 +1750,9 @@ int main(int argc, char **argv) {
       }
     }
 
+    // Print performance stats periodically
+    g_perf_stats.PrintIfNeeded();
+
     // Handle keyboard input
     char key = static_cast<char>(cv::waitKey(1));
     if (key == 27 || key == 'q' || key == 'Q') {
@@ -1547,7 +1763,7 @@ int main(int argc, char **argv) {
     } else if (key == 'k' || key == 'K') {
       show_keypoints = !show_keypoints;
       std::cout << "Keypoints: " << (show_keypoints ? "ON" : "OFF") << std::endl;
-    } else if (key == 's' || key == 'S') {
+    } else if (key == 't' || key == 'T') {
       show_skeleton = !show_skeleton;
       std::cout << "Skeleton: " << (show_skeleton ? "ON" : "OFF") << std::endl;
     } else if (key == 'i' || key == 'I') {
@@ -1604,6 +1820,28 @@ int main(int argc, char **argv) {
     } else if (key == 'p' || key == 'P') {
       // Print current parameters
       depth_region.PrintParameters();
+    } else if (key == 'r' || key == 'R') {
+      // Toggle recording
+      bool was_off = !g_runtime_flags.record_enabled;
+      g_runtime_flags.record_enabled = !g_runtime_flags.record_enabled;
+
+      if (g_runtime_flags.record_enabled && was_off) {
+        // OFF -> ON: Create new session
+        CreateNewSession();
+        depth_region.ClearLandingPoints();  // Clear previous data
+      }
+
+      std::cout << "[录制] REC: " << (g_runtime_flags.record_enabled ? "ON" : "OFF") << std::endl;
+    } else if (key == 'c' || key == 'C') {
+      // Clear landing points cache
+      depth_region.ClearLandingPoints();
+    } else if (key == 's' || key == 'S') {
+      // Save landing points to CSV
+      if (g_current_session.active) {
+        depth_region.FlushLandingPoints(g_current_session.output_dir);
+      } else {
+        std::cout << "[保存] 请先按 R 开始录制会话" << std::endl;
+      }
     }
   }
 

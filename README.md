@@ -2,22 +2,65 @@
 
 基于IMSEE双目相机的YOLOv8人体姿态检测系统 (独立版本)
 
+## 依赖项
+
+### 系统依赖
+
+| 依赖 | 版本 | 说明 |
+|------|------|------|
+| Ubuntu | 18.04+ | 或其他 Linux x86-64 |
+| GCC | 7+ | 需支持 C++14 |
+| CMake | 3.10+ | 构建工具 |
+| OpenCV | 3.0+ | 图像处理 |
+| ONNX Runtime | 1.17.0+ | 模型推理 |
+| Python | 3.6+ | 模型准备脚本 |
+
+### 硬件依赖
+
+- IMSEE 双目相机（INDEMIND）
+- USB 3.0 接口
+
+## 模型路径
+
+```
+models/
+└── yolov8n-pose.onnx    # YOLOv8 姿态检测模型 (~6MB)
+```
+
+模型由 `prepare_yolo_model.py` 自动下载并转换。
+
 ## 快速开始
 
 ### Linux
 
 ```bash
-# 1. 安装依赖
-./install_onnxruntime.sh
+# 1. 安装 ONNX Runtime
+sudo ./install_onnxruntime.sh
+
+# 2. 准备 YOLO 模型（需要 Python 环境）
+pip install torch torchvision ultralytics
 python3 prepare_yolo_model.py
 
-# 2. 编译
-mkdir build && cd build
+# 3. 编译
+mkdir -p build && cd build
 cmake .. && make -j4
 
-# 3. 运行
+# 4. 连接 IMSEE 相机并运行
 cd ..
 sudo ./build/yolo_pose_detection
+```
+
+### 验证安装
+
+```bash
+# 检查 ONNX Runtime 是否安装
+ldconfig -p | grep onnxruntime
+
+# 检查模型文件
+ls -lh models/yolov8n-pose.onnx
+
+# 检查相机连接
+lsusb | grep -i indemind
 ```
 
 ### Windows

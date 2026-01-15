@@ -184,7 +184,7 @@ add_executable(yolo_pose_detection
 )
 
 set_target_properties(yolo_pose_detection PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     OUTPUT_NAME "yolo_pose_detection"
 )
 
@@ -213,6 +213,7 @@ add_executable(yolo_pose_indemind_left
 )
 
 set_target_properties(yolo_pose_indemind_left PROPERTIES
+#    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build
     OUTPUT_NAME "yolo_pose_indemind_left"
 )
@@ -242,7 +243,7 @@ add_executable(yolo_pose_rgb_only
 )
 
 set_target_properties(yolo_pose_rgb_only PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     OUTPUT_NAME "yolo_pose_rgb_only"
 )
 
