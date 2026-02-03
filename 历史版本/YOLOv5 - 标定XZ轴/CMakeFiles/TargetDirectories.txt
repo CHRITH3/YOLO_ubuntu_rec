@@ -1,9 +1,0 @@
-/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/CMakeFiles/yolo_pose_detection.dir
-/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/CMakeFiles/yolo_pose_indemind_left.dir
-/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/CMakeFiles/yolo_pose_rgb_only.dir
-/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/CMakeFiles/edit_cache.dir
-/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/CMakeFiles/rebuild_cache.dir
-/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/CMakeFiles/list_install_components.dir
-/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/CMakeFiles/install.dir
-/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/CMakeFiles/install/local.dir
-/home/chris4/workspace/from_win/2 工程/历史版本 1215/YOLOv5 - 标定XZ轴/CMakeFiles/install/strip.dir

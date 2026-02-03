@@ -53,10 +53,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/chris4/workspace/from_vm/YOLO
+CMAKE_SOURCE_DIR = /home/chris4/workspace/from_vm/YOLO_rec
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/chris4/workspace/from_vm/YOLO/build
+CMAKE_BINARY_DIR = /home/chris4/workspace/from_vm/YOLO_rec/build
 
 # Include any dependencies generated for this target.
 include CMakeFiles/yolo_pose_indemind_left.dir/depend.make
@@ -72,50 +72,125 @@ include CMakeFiles/yolo_pose_indemind_left.dir/flags.make
 CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/flags.make
 CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o: ../get_pose_indemind_left.cpp
 CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o -c /home/chris4/workspace/from_vm/YOLO/get_pose_indemind_left.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o -c /home/chris4/workspace/from_vm/YOLO_rec/get_pose_indemind_left.cpp
 
 CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO/get_pose_indemind_left.cpp > CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO_rec/get_pose_indemind_left.cpp > CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.i
 
 CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO/get_pose_indemind_left.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO_rec/get_pose_indemind_left.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.s
 
 CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/flags.make
 CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o: ../yolo_pose_detector.cpp
 CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o -c /home/chris4/workspace/from_vm/YOLO/yolo_pose_detector.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o -c /home/chris4/workspace/from_vm/YOLO_rec/yolo_pose_detector.cpp
 
 CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO/yolo_pose_detector.cpp > CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO_rec/yolo_pose_detector.cpp > CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.i
 
 CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO/yolo_pose_detector.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO_rec/yolo_pose_detector.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.s
 
 CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/flags.make
 CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o: ../pose_utils.cpp
 CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o -c /home/chris4/workspace/from_vm/YOLO/pose_utils.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o -c /home/chris4/workspace/from_vm/YOLO_rec/pose_utils.cpp
 
 CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO/pose_utils.cpp > CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO_rec/pose_utils.cpp > CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.i
 
 CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO/pose_utils.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO_rec/pose_utils.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.s
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/flags.make
+CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.o: ../app/camera_intrinsics.cpp
+CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.o -c /home/chris4/workspace/from_vm/YOLO_rec/app/camera_intrinsics.cpp
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO_rec/app/camera_intrinsics.cpp > CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.i
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO_rec/app/camera_intrinsics.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.s
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/flags.make
+CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.o: ../app/depth_region.cpp
+CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.o -c /home/chris4/workspace/from_vm/YOLO_rec/app/depth_region.cpp
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO_rec/app/depth_region.cpp > CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.i
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO_rec/app/depth_region.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.s
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/flags.make
+CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.o: ../app/depth_utils.cpp
+CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.o -c /home/chris4/workspace/from_vm/YOLO_rec/app/depth_utils.cpp
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO_rec/app/depth_utils.cpp > CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.i
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO_rec/app/depth_utils.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.s
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/flags.make
+CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.o: ../app/perf_stats.cpp
+CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.o -c /home/chris4/workspace/from_vm/YOLO_rec/app/perf_stats.cpp
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO_rec/app/perf_stats.cpp > CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.i
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO_rec/app/perf_stats.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.s
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/flags.make
+CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.o: ../app/runtime_state.cpp
+CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.o: CMakeFiles/yolo_pose_indemind_left.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.o -MF CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.o.d -o CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.o -c /home/chris4/workspace/from_vm/YOLO_rec/app/runtime_state.cpp
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chris4/workspace/from_vm/YOLO_rec/app/runtime_state.cpp > CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.i
+
+CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chris4/workspace/from_vm/YOLO_rec/app/runtime_state.cpp -o CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.s
 
 # Object files for target yolo_pose_indemind_left
 yolo_pose_indemind_left_OBJECTS = \
 "CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o" \
 "CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o" \
-"CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o"
+"CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o" \
+"CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.o" \
+"CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.o" \
+"CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.o" \
+"CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.o" \
+"CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.o"
 
 # External object files for target yolo_pose_indemind_left
 yolo_pose_indemind_left_EXTERNAL_OBJECTS =
@@ -123,6 +198,11 @@ yolo_pose_indemind_left_EXTERNAL_OBJECTS =
 yolo_pose_indemind_left: CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o
 yolo_pose_indemind_left: CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o
 yolo_pose_indemind_left: CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o
+yolo_pose_indemind_left: CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.o
+yolo_pose_indemind_left: CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.o
+yolo_pose_indemind_left: CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.o
+yolo_pose_indemind_left: CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.o
+yolo_pose_indemind_left: CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.o
 yolo_pose_indemind_left: CMakeFiles/yolo_pose_indemind_left.dir/build.make
 yolo_pose_indemind_left: ../lib/libindemind.so
 yolo_pose_indemind_left: /usr/local/lib/libopencv_dnn.so.3.4.3
@@ -144,7 +224,7 @@ yolo_pose_indemind_left: /usr/local/lib/libopencv_imgcodecs.so.3.4.3
 yolo_pose_indemind_left: /usr/local/lib/libopencv_imgproc.so.3.4.3
 yolo_pose_indemind_left: /usr/local/lib/libopencv_core.so.3.4.3
 yolo_pose_indemind_left: CMakeFiles/yolo_pose_indemind_left.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/chris4/workspace/from_vm/YOLO/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Linking CXX executable yolo_pose_indemind_left"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Linking CXX executable yolo_pose_indemind_left"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/yolo_pose_indemind_left.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -156,6 +236,6 @@ CMakeFiles/yolo_pose_indemind_left.dir/clean:
 .PHONY : CMakeFiles/yolo_pose_indemind_left.dir/clean
 
 CMakeFiles/yolo_pose_indemind_left.dir/depend:
-	cd /home/chris4/workspace/from_vm/YOLO/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/chris4/workspace/from_vm/YOLO /home/chris4/workspace/from_vm/YOLO /home/chris4/workspace/from_vm/YOLO/build /home/chris4/workspace/from_vm/YOLO/build /home/chris4/workspace/from_vm/YOLO/build/CMakeFiles/yolo_pose_indemind_left.dir/DependInfo.cmake --color=$(COLOR)
+	cd /home/chris4/workspace/from_vm/YOLO_rec/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/chris4/workspace/from_vm/YOLO_rec /home/chris4/workspace/from_vm/YOLO_rec /home/chris4/workspace/from_vm/YOLO_rec/build /home/chris4/workspace/from_vm/YOLO_rec/build /home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles/yolo_pose_indemind_left.dir/DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/yolo_pose_indemind_left.dir/depend
 

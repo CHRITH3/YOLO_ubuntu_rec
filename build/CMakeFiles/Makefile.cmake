@@ -124,7 +124,5 @@ set(CMAKE_MAKEFILE_PRODUCTS
 
 # Dependency information for all targets:
 set(CMAKE_DEPEND_INFO_FILES
-  "CMakeFiles/yolo_pose_detection.dir/DependInfo.cmake"
   "CMakeFiles/yolo_pose_indemind_left.dir/DependInfo.cmake"
-  "CMakeFiles/yolo_pose_rgb_only.dir/DependInfo.cmake"
   )

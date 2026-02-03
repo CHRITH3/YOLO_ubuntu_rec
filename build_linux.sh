@@ -1,7 +1,7 @@
 #!/bin/bash
-# YOLO Pose Detection - Linux Build Script
+# YOLO Pose Detection (INDEMIND Left) - Linux Build Script
 # Author: Chris
-# Date: 2025-10-17
+# Date: 2026-02-03
 
 set -e  # Exit on error
 
@@ -31,7 +31,7 @@ print_warning() {
 
 # Check if running from project directory
 if [ ! -f "CMakeLists.txt" ]; then
-    print_error "CMakeLists.txt not found! Please run this script from YOLO project directory."
+    print_error "CMakeLists.txt not found! Please run this script from YOLO_rec project directory."
     exit 1
 fi
 
@@ -64,7 +64,7 @@ else
     print_success "OpenCV found: $(pkg-config --modversion opencv)"
 fi
 
-# Check ONNX Runtime (支持 Conda 环境)
+# Check ONNX Runtime (supports Conda)
 ONNX_FOUND=false
 if [ -n "$CONDA_PREFIX" ] && [ -f "$CONDA_PREFIX/lib/libonnxruntime.so" ]; then
     print_success "ONNX Runtime found in Conda: $CONDA_PREFIX/lib/"
@@ -98,7 +98,7 @@ fi
 
 if [ ! -f "models/yolov8n-pose.onnx" ]; then
     print_warning "YOLO model not found!"
-    print_warning "Please run: python3 prepare_yolo_model.py"
+    print_warning "Please ensure models/yolov8n-pose.onnx exists"
     echo -n "Continue anyway? (y/n): "
     read -r response
     if [ "$response" != "y" ]; then
@@ -143,11 +143,11 @@ echo "========================================="
 echo "  Build Successful!"
 echo "========================================="
 echo ""
-echo "Executable location: build/yolo_pose_detection"
+echo "Executable location: build/yolo_pose_indemind_left"
 echo ""
 echo "To run:"
 echo "  1. Ensure IMSEE camera is connected"
 echo "  2. Check USB permissions: lsusb"
-echo "  3. Run: sudo ./build/yolo_pose_detection"
+echo "  3. Run: sudo ./build/yolo_pose_indemind_left"
 echo ""
 echo "For more information, see README.md"

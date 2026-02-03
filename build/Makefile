@@ -57,10 +57,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/chris4/workspace/from_vm/YOLO
+CMAKE_SOURCE_DIR = /home/chris4/workspace/from_vm/YOLO_rec
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/chris4/workspace/from_vm/YOLO/build
+CMAKE_BINARY_DIR = /home/chris4/workspace/from_vm/YOLO_rec/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -132,9 +132,9 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/chris4/workspace/from_vm/YOLO/build/CMakeFiles /home/chris4/workspace/from_vm/YOLO/build//CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles /home/chris4/workspace/from_vm/YOLO_rec/build//CMakeFiles/progress.marks
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/chris4/workspace/from_vm/YOLO/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/chris4/workspace/from_vm/YOLO_rec/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -162,19 +162,6 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named yolo_pose_detection
-
-# Build rule for target.
-yolo_pose_detection: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 yolo_pose_detection
-.PHONY : yolo_pose_detection
-
-# fast build rule for target.
-yolo_pose_detection/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_detection.dir/build.make CMakeFiles/yolo_pose_detection.dir/build
-.PHONY : yolo_pose_detection/fast
-
-#=============================================================================
 # Target rules for targets named yolo_pose_indemind_left
 
 # Build rule for target.
@@ -187,18 +174,125 @@ yolo_pose_indemind_left/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/build
 .PHONY : yolo_pose_indemind_left/fast
 
-#=============================================================================
-# Target rules for targets named yolo_pose_rgb_only
+app/camera_intrinsics.o: app/camera_intrinsics.cpp.o
+.PHONY : app/camera_intrinsics.o
 
-# Build rule for target.
-yolo_pose_rgb_only: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 yolo_pose_rgb_only
-.PHONY : yolo_pose_rgb_only
+# target to build an object file
+app/camera_intrinsics.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.o
+.PHONY : app/camera_intrinsics.cpp.o
 
-# fast build rule for target.
-yolo_pose_rgb_only/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_rgb_only.dir/build.make CMakeFiles/yolo_pose_rgb_only.dir/build
-.PHONY : yolo_pose_rgb_only/fast
+app/camera_intrinsics.i: app/camera_intrinsics.cpp.i
+.PHONY : app/camera_intrinsics.i
+
+# target to preprocess a source file
+app/camera_intrinsics.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.i
+.PHONY : app/camera_intrinsics.cpp.i
+
+app/camera_intrinsics.s: app/camera_intrinsics.cpp.s
+.PHONY : app/camera_intrinsics.s
+
+# target to generate assembly for a file
+app/camera_intrinsics.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/camera_intrinsics.cpp.s
+.PHONY : app/camera_intrinsics.cpp.s
+
+app/depth_region.o: app/depth_region.cpp.o
+.PHONY : app/depth_region.o
+
+# target to build an object file
+app/depth_region.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.o
+.PHONY : app/depth_region.cpp.o
+
+app/depth_region.i: app/depth_region.cpp.i
+.PHONY : app/depth_region.i
+
+# target to preprocess a source file
+app/depth_region.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.i
+.PHONY : app/depth_region.cpp.i
+
+app/depth_region.s: app/depth_region.cpp.s
+.PHONY : app/depth_region.s
+
+# target to generate assembly for a file
+app/depth_region.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/depth_region.cpp.s
+.PHONY : app/depth_region.cpp.s
+
+app/depth_utils.o: app/depth_utils.cpp.o
+.PHONY : app/depth_utils.o
+
+# target to build an object file
+app/depth_utils.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.o
+.PHONY : app/depth_utils.cpp.o
+
+app/depth_utils.i: app/depth_utils.cpp.i
+.PHONY : app/depth_utils.i
+
+# target to preprocess a source file
+app/depth_utils.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.i
+.PHONY : app/depth_utils.cpp.i
+
+app/depth_utils.s: app/depth_utils.cpp.s
+.PHONY : app/depth_utils.s
+
+# target to generate assembly for a file
+app/depth_utils.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/depth_utils.cpp.s
+.PHONY : app/depth_utils.cpp.s
+
+app/perf_stats.o: app/perf_stats.cpp.o
+.PHONY : app/perf_stats.o
+
+# target to build an object file
+app/perf_stats.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.o
+.PHONY : app/perf_stats.cpp.o
+
+app/perf_stats.i: app/perf_stats.cpp.i
+.PHONY : app/perf_stats.i
+
+# target to preprocess a source file
+app/perf_stats.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.i
+.PHONY : app/perf_stats.cpp.i
+
+app/perf_stats.s: app/perf_stats.cpp.s
+.PHONY : app/perf_stats.s
+
+# target to generate assembly for a file
+app/perf_stats.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/perf_stats.cpp.s
+.PHONY : app/perf_stats.cpp.s
+
+app/runtime_state.o: app/runtime_state.cpp.o
+.PHONY : app/runtime_state.o
+
+# target to build an object file
+app/runtime_state.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.o
+.PHONY : app/runtime_state.cpp.o
+
+app/runtime_state.i: app/runtime_state.cpp.i
+.PHONY : app/runtime_state.i
+
+# target to preprocess a source file
+app/runtime_state.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.i
+.PHONY : app/runtime_state.cpp.i
+
+app/runtime_state.s: app/runtime_state.cpp.s
+.PHONY : app/runtime_state.s
+
+# target to generate assembly for a file
+app/runtime_state.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/app/runtime_state.cpp.s
+.PHONY : app/runtime_state.cpp.s
 
 get_pose_indemind_left.o: get_pose_indemind_left.cpp.o
 .PHONY : get_pose_indemind_left.o
@@ -224,62 +318,12 @@ get_pose_indemind_left.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.s
 .PHONY : get_pose_indemind_left.cpp.s
 
-get_pose_rgb_only.o: get_pose_rgb_only.cpp.o
-.PHONY : get_pose_rgb_only.o
-
-# target to build an object file
-get_pose_rgb_only.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_rgb_only.dir/build.make CMakeFiles/yolo_pose_rgb_only.dir/get_pose_rgb_only.cpp.o
-.PHONY : get_pose_rgb_only.cpp.o
-
-get_pose_rgb_only.i: get_pose_rgb_only.cpp.i
-.PHONY : get_pose_rgb_only.i
-
-# target to preprocess a source file
-get_pose_rgb_only.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_rgb_only.dir/build.make CMakeFiles/yolo_pose_rgb_only.dir/get_pose_rgb_only.cpp.i
-.PHONY : get_pose_rgb_only.cpp.i
-
-get_pose_rgb_only.s: get_pose_rgb_only.cpp.s
-.PHONY : get_pose_rgb_only.s
-
-# target to generate assembly for a file
-get_pose_rgb_only.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_rgb_only.dir/build.make CMakeFiles/yolo_pose_rgb_only.dir/get_pose_rgb_only.cpp.s
-.PHONY : get_pose_rgb_only.cpp.s
-
-get_pose_with_depth.o: get_pose_with_depth.cpp.o
-.PHONY : get_pose_with_depth.o
-
-# target to build an object file
-get_pose_with_depth.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_detection.dir/build.make CMakeFiles/yolo_pose_detection.dir/get_pose_with_depth.cpp.o
-.PHONY : get_pose_with_depth.cpp.o
-
-get_pose_with_depth.i: get_pose_with_depth.cpp.i
-.PHONY : get_pose_with_depth.i
-
-# target to preprocess a source file
-get_pose_with_depth.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_detection.dir/build.make CMakeFiles/yolo_pose_detection.dir/get_pose_with_depth.cpp.i
-.PHONY : get_pose_with_depth.cpp.i
-
-get_pose_with_depth.s: get_pose_with_depth.cpp.s
-.PHONY : get_pose_with_depth.s
-
-# target to generate assembly for a file
-get_pose_with_depth.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_detection.dir/build.make CMakeFiles/yolo_pose_detection.dir/get_pose_with_depth.cpp.s
-.PHONY : get_pose_with_depth.cpp.s
-
 pose_utils.o: pose_utils.cpp.o
 .PHONY : pose_utils.o
 
 # target to build an object file
 pose_utils.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_detection.dir/build.make CMakeFiles/yolo_pose_detection.dir/pose_utils.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_rgb_only.dir/build.make CMakeFiles/yolo_pose_rgb_only.dir/pose_utils.cpp.o
 .PHONY : pose_utils.cpp.o
 
 pose_utils.i: pose_utils.cpp.i
@@ -287,9 +331,7 @@ pose_utils.i: pose_utils.cpp.i
 
 # target to preprocess a source file
 pose_utils.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_detection.dir/build.make CMakeFiles/yolo_pose_detection.dir/pose_utils.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_rgb_only.dir/build.make CMakeFiles/yolo_pose_rgb_only.dir/pose_utils.cpp.i
 .PHONY : pose_utils.cpp.i
 
 pose_utils.s: pose_utils.cpp.s
@@ -297,9 +339,7 @@ pose_utils.s: pose_utils.cpp.s
 
 # target to generate assembly for a file
 pose_utils.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_detection.dir/build.make CMakeFiles/yolo_pose_detection.dir/pose_utils.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/pose_utils.cpp.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_rgb_only.dir/build.make CMakeFiles/yolo_pose_rgb_only.dir/pose_utils.cpp.s
 .PHONY : pose_utils.cpp.s
 
 yolo_pose_detector.o: yolo_pose_detector.cpp.o
@@ -307,9 +347,7 @@ yolo_pose_detector.o: yolo_pose_detector.cpp.o
 
 # target to build an object file
 yolo_pose_detector.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_detection.dir/build.make CMakeFiles/yolo_pose_detection.dir/yolo_pose_detector.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_rgb_only.dir/build.make CMakeFiles/yolo_pose_rgb_only.dir/yolo_pose_detector.cpp.o
 .PHONY : yolo_pose_detector.cpp.o
 
 yolo_pose_detector.i: yolo_pose_detector.cpp.i
@@ -317,9 +355,7 @@ yolo_pose_detector.i: yolo_pose_detector.cpp.i
 
 # target to preprocess a source file
 yolo_pose_detector.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_detection.dir/build.make CMakeFiles/yolo_pose_detection.dir/yolo_pose_detector.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_rgb_only.dir/build.make CMakeFiles/yolo_pose_rgb_only.dir/yolo_pose_detector.cpp.i
 .PHONY : yolo_pose_detector.cpp.i
 
 yolo_pose_detector.s: yolo_pose_detector.cpp.s
@@ -327,9 +363,7 @@ yolo_pose_detector.s: yolo_pose_detector.cpp.s
 
 # target to generate assembly for a file
 yolo_pose_detector.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_detection.dir/build.make CMakeFiles/yolo_pose_detection.dir/yolo_pose_detector.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_indemind_left.dir/build.make CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/yolo_pose_rgb_only.dir/build.make CMakeFiles/yolo_pose_rgb_only.dir/yolo_pose_detector.cpp.s
 .PHONY : yolo_pose_detector.cpp.s
 
 # Help Target
@@ -344,18 +378,25 @@ help:
 	@echo "... install/strip"
 	@echo "... list_install_components"
 	@echo "... rebuild_cache"
-	@echo "... yolo_pose_detection"
 	@echo "... yolo_pose_indemind_left"
-	@echo "... yolo_pose_rgb_only"
+	@echo "... app/camera_intrinsics.o"
+	@echo "... app/camera_intrinsics.i"
+	@echo "... app/camera_intrinsics.s"
+	@echo "... app/depth_region.o"
+	@echo "... app/depth_region.i"
+	@echo "... app/depth_region.s"
+	@echo "... app/depth_utils.o"
+	@echo "... app/depth_utils.i"
+	@echo "... app/depth_utils.s"
+	@echo "... app/perf_stats.o"
+	@echo "... app/perf_stats.i"
+	@echo "... app/perf_stats.s"
+	@echo "... app/runtime_state.o"
+	@echo "... app/runtime_state.i"
+	@echo "... app/runtime_state.s"
 	@echo "... get_pose_indemind_left.o"
 	@echo "... get_pose_indemind_left.i"
 	@echo "... get_pose_indemind_left.s"
-	@echo "... get_pose_rgb_only.o"
-	@echo "... get_pose_rgb_only.i"
-	@echo "... get_pose_rgb_only.s"
-	@echo "... get_pose_with_depth.o"
-	@echo "... get_pose_with_depth.i"
-	@echo "... get_pose_with_depth.s"
 	@echo "... pose_utils.o"
 	@echo "... pose_utils.i"
 	@echo "... pose_utils.s"

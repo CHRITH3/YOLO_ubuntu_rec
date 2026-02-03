@@ -1,7 +1,7 @@
 CMakeFiles/yolo_pose_indemind_left.dir/yolo_pose_detector.cpp.o: \
- /home/chris4/workspace/from_vm/YOLO/yolo_pose_detector.cpp \
+ /home/chris4/workspace/from_vm/YOLO_rec/yolo_pose_detector.cpp \
  /usr/include/stdc-predef.h \
- /home/chris4/workspace/from_vm/YOLO/yolo_pose_detector.h \
+ /home/chris4/workspace/from_vm/YOLO_rec/yolo_pose_detector.h \
  /usr/local/include/opencv2/opencv.hpp \
  /usr/local/include/opencv2/opencv_modules.hpp \
  /usr/local/include/opencv2/core.hpp \

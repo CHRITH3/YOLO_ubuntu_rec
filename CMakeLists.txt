@@ -154,6 +154,7 @@ endif()
 # ============================================
 include_directories(
     ${PROJECT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/app
     ${IMSEE_INCLUDE_DIR}
     ${OpenCV_INCLUDE_DIRS}
     ${ONNXRUNTIME_INCLUDE_DIR}
@@ -172,44 +173,24 @@ set(COMMON_HEADERS
     pose_utils.h
 )
 
+set(APP_SOURCES
+    app/camera_intrinsics.cpp
+    app/depth_region.cpp
+    app/depth_utils.cpp
+    app/perf_stats.cpp
+    app/runtime_state.cpp
+)
+
 # ============================================
 # Build Executables
 # ============================================
 
-# 1. YOLO Pose with Depth (requires IMSEE camera)
-add_executable(yolo_pose_detection
-    get_pose_with_depth.cpp
-    ${COMMON_SOURCES}
-    ${COMMON_HEADERS}
-)
-
-set_target_properties(yolo_pose_detection PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-    OUTPUT_NAME "yolo_pose_detection"
-)
-
-target_link_libraries(yolo_pose_detection
-    ${IMSEE_LIB}
-    ${OpenCV_LIBS}
-    ${ONNXRUNTIME_LIB}
-)
-
-if(UNIX AND NOT APPLE)
-    target_link_libraries(yolo_pose_detection pthread)
-endif()
-
-if(UNIX)
-    set_target_properties(yolo_pose_detection PROPERTIES
-        BUILD_RPATH "${IMSEE_LIB_DIR}"
-        INSTALL_RPATH "${IMSEE_LIB_DIR}:$ORIGIN/../lib"
-    )
-endif()
-
-# 2. YOLO Pose INDEMIND Left Camera (RGB only, no depth)
+# YOLO Pose INDEMIND Left Camera (RGB only, no depth)
 add_executable(yolo_pose_indemind_left
     get_pose_indemind_left.cpp
     ${COMMON_SOURCES}
     ${COMMON_HEADERS}
+    ${APP_SOURCES}
 )
 
 set_target_properties(yolo_pose_indemind_left PROPERTIES
@@ -235,31 +216,10 @@ if(UNIX)
     )
 endif()
 
-# 3. YOLO Pose RGB Only (no camera dependency)
-add_executable(yolo_pose_rgb_only
-    get_pose_rgb_only.cpp
-    ${COMMON_SOURCES}
-    ${COMMON_HEADERS}
-)
-
-set_target_properties(yolo_pose_rgb_only PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-    OUTPUT_NAME "yolo_pose_rgb_only"
-)
-
-target_link_libraries(yolo_pose_rgb_only
-    ${OpenCV_LIBS}
-    ${ONNXRUNTIME_LIB}
-)
-
-if(UNIX AND NOT APPLE)
-    target_link_libraries(yolo_pose_rgb_only pthread)
-endif()
-
 # ============================================
 # Installation Rules
 # ============================================
-install(TARGETS yolo_pose_detection yolo_pose_indemind_left yolo_pose_rgb_only
+install(TARGETS yolo_pose_indemind_left
     RUNTIME DESTINATION bin
 )
 
@@ -282,15 +242,13 @@ message(STATUS "=========================================")
 message(STATUS "  Build Configuration Summary")
 message(STATUS "=========================================")
 message(STATUS "Executables:")
-message(STATUS "  1. yolo_pose_detection       (INDEMIND RGB+Depth)")
-message(STATUS "  2. yolo_pose_indemind_left   (INDEMIND RGB only)")
-message(STATUS "  3. yolo_pose_rgb_only        (Webcam/Video/Image)")
+message(STATUS "  1. yolo_pose_indemind_left   (INDEMIND RGB only)")
 message(STATUS "Output directory: ${PROJECT_SOURCE_DIR}/build")
 message(STATUS "")
 message(STATUS "Dependencies:")
 message(STATUS "  ✓ OpenCV ${OpenCV_VERSION}")
 message(STATUS "  ✓ ONNX Runtime")
-message(STATUS "  ✓ IMSEE SDK (for programs 1 & 2)")
+message(STATUS "  ✓ IMSEE SDK")
 message(STATUS "")
 message(STATUS "To build:")
 message(STATUS "  mkdir -p build && cd build")
@@ -299,12 +257,8 @@ message(STATUS "  make")
 message(STATUS "")
 message(STATUS "To run:")
 if(WIN32)
-    message(STATUS "  .\\build\\yolo_pose_detection.exe         (INDEMIND RGB+Depth)")
     message(STATUS "  .\\build\\yolo_pose_indemind_left.exe     (INDEMIND RGB only)")
-    message(STATUS "  .\\build\\yolo_pose_rgb_only.exe          (Webcam/Video/Image)")
 else()
-    message(STATUS "  sudo ./build/yolo_pose_detection          (INDEMIND RGB+Depth)")
     message(STATUS "  sudo ./build/yolo_pose_indemind_left      (INDEMIND RGB only)")
-    message(STATUS "  ./build/yolo_pose_rgb_only                (Webcam/Video/Image)")
 endif()
 message(STATUS "=========================================")
