@@ -1,0 +1,14 @@
+{
+  "run_id": "trampoline_roi_ransac_20260203T000000Z_a1b2c3d",
+  "created_at": "2026-02-03T10:07:51.467729+00:00",
+  "repo": {
+    "path": "/home/chris4/workspace/from_vm/YOLO_rec",
+    "branch": "feature/data_recording_toggle",
+    "commit": "3fe533f3ea01f2177bfde1af2531eca6d17e9914",
+    "commit_short": "3fe533f",
+    "dirty": true
+  },
+  "policy": {
+    "max_rework_rounds_per_step": 6
+  }
+}

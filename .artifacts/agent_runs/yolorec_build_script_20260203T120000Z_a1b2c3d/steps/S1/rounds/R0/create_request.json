@@ -1,0 +1,42 @@
+{
+  "task_kind": "step",
+  "task_id": "yolorec_build_script",
+  "run_id": "yolorec_build_script_20260203T120000Z_a1b2c3d",
+  "step_id": "S1",
+  "step_title": "Add build script for get_pose_indemind_left",
+  "step_description": "Create a Linux build script for the YOLO_rec project by referencing /home/chris4/workspace/from_vm/YOLO/build_linux.sh. The script should compile get_pose_indemind_left.cpp (and any required project sources) into a runnable binary, using the same toolchain/flags/library linkage style as the reference script where applicable. Check whether a similar script already exists in YOLO_rec and update it if necessary; otherwise add a new script.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "A build script exists in YOLO_rec that clearly targets get_pose_indemind_left.cpp and produces a binary (e.g., get_pose_indemind_left or similar) when run.",
+    "The script mirrors the reference /home/chris4/workspace/from_vm/YOLO/build_linux.sh toolchain/flags/linkage patterns where applicable, adapted to YOLO_rec paths and dependencies.",
+    "Running the script from the YOLO_rec root either succeeds or provides clear actionable errors for missing dependencies; if not run, document why and what is required.",
+    "Only relevant files are modified/added; no unrelated changes."
+  ],
+  "context": {
+    "repo_overview": "YOLO_rec contains get_pose_indemind_left.cpp and related pose/yolo sources; user wants a build script similar to YOLO/build_linux.sh.",
+    "run_dir": ".artifacts/agent_runs/yolorec_build_script_20260203T120000Z_a1b2c3d/",
+    "related_files": [
+      "/home/chris4/workspace/from_vm/YOLO/build_linux.sh",
+      "/home/chris4/workspace/from_vm/YOLO_rec/get_pose_indemind_left.cpp",
+      "/home/chris4/workspace/from_vm/YOLO_rec/pose_utils.cpp",
+      "/home/chris4/workspace/from_vm/YOLO_rec/pose_utils.h",
+      "/home/chris4/workspace/from_vm/YOLO_rec/yolo_pose_detector.cpp",
+      "/home/chris4/workspace/from_vm/YOLO_rec/yolo_pose_detector.h",
+      "/home/chris4/workspace/from_vm/YOLO_rec/CMakeLists.txt"
+    ],
+    "constraints": [
+      "Follow the reference script style and flags where applicable.",
+      "Keep changes minimal and focused on the build script.",
+      "Use ASCII in new/edited files.",
+      "Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"
+    ]
+  },
+  "expected_outputs": [
+    "A build script in /home/chris4/workspace/from_vm/YOLO_rec (e.g., build_linux.sh or similarly named) that compiles get_pose_indemind_left.cpp",
+    "If executed, build logs captured under .artifacts/agent_runs/yolorec_build_script_20260203T120000Z_a1b2c3d/"
+  ],
+  "allowed_actions": [
+    "edit repo files",
+    "run build/test commands",
+    "write/update docs"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "feedback_kind": "rework",
+  "step_id": "S1",
+  "overall_assessment": "partial_failure",
+  "problems": [
+    {
+      "criteria": "Mouse-based 3-point trampoline frame creation is removed or bypassed; 4-point ROI selection in the YOLO Pose window is used to define the bed surface region.",
+      "issue": "Output asserts the change but provides no concrete code evidence showing removal of 3-point logic and addition of 4-point ROI click handling in the YOLO Pose window.",
+      "evidence": "Summary-only report; no file/line references or snippets.",
+      "impact": "Cannot verify the UI/input change is implemented as required."
+    },
+    {
+      "criteria": "A RANSAC plane fit is performed on points inside the ROI; then a refinement plane fit is done using all inliers and the resulting plane parameters are used for the trampoline frame.",
+      "issue": "No code evidence of RANSAC implementation or refinement method; missing details of how inliers are selected and how refinement is computed.",
+      "evidence": "Summary-only report; no algorithmic specifics or references.",
+      "impact": "Cannot verify core plane-fitting requirement is met."
+    },
+    {
+      "criteria": "Trampoline frame axes are defined as Z = plane normal (up), X aligned with the long edge toward image right, and Y = Z x X; camera-to-trampoline transforms and any dependent outputs use this new frame without breaking existing pipeline.",
+      "issue": "No evidence of axis definition logic, long-edge selection toward image right, or where the new frame is used for transforms.",
+      "evidence": "Summary-only report; no file/line references or snippets.",
+      "impact": "Cannot verify coordinate frame rules or integration into transforms."
+    }
+  ],
+  "required_changes": [
+    "Provide concrete code evidence: include file/line references and short snippets for (a) 4-point ROI click handling + removal of 3-point logic, (b) RANSAC plane fit + refinement using inliers, (c) axis definition with long edge toward image right and Y = Z x X, (d) use of the new frame in camera->trampoline transform.",
+    "Create an artifact diff patch at .artifacts/agent_runs/trampoline_roi_ransac_20260203T000000Z_a1b2c3d/changes.patch and mention it in Logs/Artifacts section.",
+    "If files beyond app/depth_region.h and get_pose_indemind_left.cpp were modified, list them explicitly in Files Changed."
+  ],
+  "next_actions": [
+    "Update the output report to include the requested evidence while keeping within the Output Contract format.",
+    "Attach a concise patch artifact as requested."
+  ],
+  "rework_policy": {
+    "must_reduce_open_issues": true,
+    "no_new_scope": true
+  }
+}
