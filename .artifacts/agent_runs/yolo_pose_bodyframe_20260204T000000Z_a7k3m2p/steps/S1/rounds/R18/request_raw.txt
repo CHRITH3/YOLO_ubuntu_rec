@@ -1,0 +1,44 @@
+PARAMS
+action: resume
+backend: codex
+run_id: yolo_pose_bodyframe_20260204T000000Z_a7k3m2p
+step_id: S1
+round: 18
+thread_id: 019c2708-3361-7bb3-a5ec-296bc9fa32e5
+
+PROMPT
+{"feedback_kind":"rework","step_id":"S1","overall_assessment":"partial_failure","problems":[{"criteria":"Per-frame body frame axes (x_body, y_body, z_body) are computed and orthonormalized; R_rel = R_bed^T * R_body is computed and converted to quaternion.","issue":"BuildBodyFrameFromPose uses shoulders−pelvis as z_axis and computes y via cross; x_axis uses right_hip−left_hip, which is the opposite of required right_hip→left_hip, and z_body is not defined as x_body × y_body. This does not follow the specified body-frame definition or Gram-Schmidt orthonormalization.","evidence":"get_pose_indemind_left.cpp BuildBodyFrameFromPose: z_raw = shoulders - pelvis; x_raw = rh - lh; y_axis = z_axis.cross(x_axis).","impact":"Body frame axes are misassigned; quaternion, Euler angles, and flip/twist/side measurements are incorrect."},{"criteria":"Per-axis rotation angles (about x/y/z body axes) are derived and cumulative rotation is tracked to compute flip/twist/side-flip counts.","issue":"Metrics map counts as [x,z,y], swapping twist/side relative to the spec (twist should be about y_body, side about z_body).","evidence":"get_pose_indemind_left.cpp metrics panel: Counts (flip/twist/side): [counts[0], counts[2], counts[1]].","impact":"Twist/side counts are reported incorrectly."}],"required_changes":["Define y_body as hip_mid→shoulder_mid, x_body as right_hip→left_hip (left minus right), z_body = x_body × y_body, then Gram-Schmidt/normalize to orthonormal basis. Ensure R_body_bed columns are x,y,z in bed coordinates.","Update metrics mapping (and any labels/variables) so flip uses x, twist uses y, side uses z; ideally compute explicit flip/twist/side counts for clarity."],"next_actions":["Patch BuildBodyFrameFromPose to align axis definitions and orthonormalization with the spec.","Adjust metrics display/counts mapping to match flip=x, twist=y, side=z.","Confirm axes visualization and quaternion/angles still use the updated basis."],"rework_policy":{"must_reduce_open_issues":true,"no_new_scope":true}}
+
+REQUEST_JSON
+{
+  "feedback_kind": "rework",
+  "step_id": "S1",
+  "overall_assessment": "partial_failure",
+  "problems": [
+    {
+      "criteria": "Per-frame body frame axes (x_body, y_body, z_body) are computed and orthonormalized; R_rel = R_bed^T * R_body is computed and converted to quaternion.",
+      "issue": "BuildBodyFrameFromPose uses shoulders−pelvis as z_axis and computes y via cross; x_axis uses right_hip−left_hip, which is the opposite of required right_hip→left_hip, and z_body is not defined as x_body × y_body. This does not follow the specified body-frame definition or Gram-Schmidt orthonormalization.",
+      "evidence": "get_pose_indemind_left.cpp BuildBodyFrameFromPose: z_raw = shoulders - pelvis; x_raw = rh - lh; y_axis = z_axis.cross(x_axis).",
+      "impact": "Body frame axes are misassigned; quaternion, Euler angles, and flip/twist/side measurements are incorrect."
+    },
+    {
+      "criteria": "Per-axis rotation angles (about x/y/z body axes) are derived and cumulative rotation is tracked to compute flip/twist/side-flip counts.",
+      "issue": "Metrics map counts as [x,z,y], swapping twist/side relative to the spec (twist should be about y_body, side about z_body).",
+      "evidence": "get_pose_indemind_left.cpp metrics panel: Counts (flip/twist/side): [counts[0], counts[2], counts[1]].",
+      "impact": "Twist/side counts are reported incorrectly."
+    }
+  ],
+  "required_changes": [
+    "Define y_body as hip_mid→shoulder_mid, x_body as right_hip→left_hip (left minus right), z_body = x_body × y_body, then Gram-Schmidt/normalize to orthonormal basis. Ensure R_body_bed columns are x,y,z in bed coordinates.",
+    "Update metrics mapping (and any labels/variables) so flip uses x, twist uses y, side uses z; ideally compute explicit flip/twist/side counts for clarity."
+  ],
+  "next_actions": [
+    "Patch BuildBodyFrameFromPose to align axis definitions and orthonormalization with the spec.",
+    "Adjust metrics display/counts mapping to match flip=x, twist=y, side=z.",
+    "Confirm axes visualization and quaternion/angles still use the updated basis."
+  ],
+  "rework_policy": {
+    "must_reduce_open_issues": true,
+    "no_new_scope": true
+  }
+}

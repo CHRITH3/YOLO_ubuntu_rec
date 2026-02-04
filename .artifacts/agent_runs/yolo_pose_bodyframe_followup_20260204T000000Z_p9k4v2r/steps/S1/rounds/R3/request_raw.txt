@@ -1,0 +1,35 @@
+PARAMS
+action: resume
+backend: codex
+run_id: yolo_pose_bodyframe_followup_20260204T000000Z_p9k4v2r
+step_id: S1
+round: 3
+thread_id: 019c27b8-52b0-7232-955d-7fb03bff231e
+
+PROMPT
+{"feedback_kind":"rework","step_id":"S1","overall_assessment":"partial_failure","problems":[{"criteria":"A new markdown doc exists at docs/20260204人体坐标系.md with a clear, beginner-friendly explanation of implementation ideas and concrete code modifications.","issue":"The document title does not match the required title \"20260204人体坐标系\".","evidence":"docs/20260204人体坐标系.md heading is \"人体坐标系可视化说明（2026-02-04）\".","impact":"Does not satisfy the explicit title requirement."}],"required_changes":["Update the doc title to exactly \"20260204人体坐标系\" (as the main heading)."],"next_actions":["Edit docs/20260204人体坐标系.md heading to match the required title."],"rework_policy":{"must_reduce_open_issues":true,"no_new_scope":true}}
+
+REQUEST_JSON
+{
+  "feedback_kind": "rework",
+  "step_id": "S1",
+  "overall_assessment": "partial_failure",
+  "problems": [
+    {
+      "criteria": "A new markdown doc exists at docs/20260204人体坐标系.md with a clear, beginner-friendly explanation of implementation ideas and concrete code modifications.",
+      "issue": "The document title does not match the required title \"20260204人体坐标系\".",
+      "evidence": "docs/20260204人体坐标系.md heading is \"人体坐标系可视化说明（2026-02-04）\".",
+      "impact": "Does not satisfy the explicit title requirement."
+    }
+  ],
+  "required_changes": [
+    "Update the doc title to exactly \"20260204人体坐标系\" (as the main heading)."
+  ],
+  "next_actions": [
+    "Edit docs/20260204人体坐标系.md heading to match the required title."
+  ],
+  "rework_policy": {
+    "must_reduce_open_issues": true,
+    "no_new_scope": true
+  }
+}

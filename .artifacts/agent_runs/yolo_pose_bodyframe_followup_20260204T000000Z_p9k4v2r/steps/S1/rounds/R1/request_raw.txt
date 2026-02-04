@@ -1,0 +1,18 @@
+PARAMS
+action: resume
+backend: codex
+run_id: yolo_pose_bodyframe_followup_20260204T000000Z_p9k4v2r
+step_id: S1
+round: 1
+thread_id: 019c27b8-52b0-7232-955d-7fb03bff231e
+
+PROMPT
+{"task_kind":"step","task_id":"yolo_pose_bodyframe_followup","run_id":"yolo_pose_bodyframe_followup_20260204T000000Z_p9k4v2r","step_id":"S1"}
+
+REQUEST_JSON
+{
+  "task_kind": "step",
+  "task_id": "yolo_pose_bodyframe_followup",
+  "run_id": "yolo_pose_bodyframe_followup_20260204T000000Z_p9k4v2r",
+  "step_id": "S1"
+}

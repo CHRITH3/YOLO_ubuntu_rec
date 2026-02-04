@@ -1,0 +1,34 @@
+{
+  "task_kind": "step",
+  "task_id": "yolo_pose_bodyframe_followup",
+  "run_id": "yolo_pose_bodyframe_followup_20260204T000000Z_p9k4v2r",
+  "step_id": "S1",
+  "step_title": "Docs + torso box + axes styling",
+  "step_description": "Create a beginner-friendly markdown doc in docs/ titled 20260204人体坐标系.md explaining the implementation approach and concrete code changes. Update visualization to hide YOLO bounding boxes and instead draw a torso-aligned 3D rectangular box that rotates with the body frame; adjust body-axis arrow thickness and length (thinner and longer). Keep modifications minimal and localized to relevant files.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "A new markdown doc exists at docs/20260204人体坐标系.md with a clear, beginner-friendly explanation of implementation ideas and concrete code modifications.",
+    "YOLO bounding boxes are no longer drawn; a torso-aligned rectangular box that rotates with the body frame is rendered instead.",
+    "Body-frame axis arrows are visibly thinner and longer than before.",
+    "Only task-relevant files are modified and code builds without errors (or verification steps are clearly documented if not run)."
+  ],
+  "context": {
+    "repo_overview": "YOLO pose detection pipeline with body frame visualization in get_pose_indemind_left.cpp.",
+    "run_dir": ".artifacts/agent_runs/yolo_pose_bodyframe_followup_20260204T000000Z_p9k4v2r/",
+    "related_files": [
+      "get_pose_indemind_left.cpp",
+      "docs/"
+    ],
+    "constraints": [
+      "Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"
+    ]
+  },
+  "expected_outputs": [
+    "docs/20260204人体坐标系.md",
+    "Updated get_pose_indemind_left.cpp"
+  ],
+  "allowed_actions": [
+    "edit repo files",
+    "run build/test commands",
+    "write/update docs"
+  ]
+}

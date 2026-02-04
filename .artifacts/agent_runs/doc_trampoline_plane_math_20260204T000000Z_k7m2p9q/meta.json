@@ -1,0 +1,14 @@
+{
+  "run_id": "doc_trampoline_plane_math_20260204T000000Z_k7m2p9q",
+  "created_at": "2026-02-04T09:06:49.806647+00:00",
+  "repo": {
+    "path": "/home/chris4/workspace/from_vm/YOLO_rec",
+    "branch": "main",
+    "commit": "6fd916ffa09c2f3709d3d762adbdb8e9a96693fa",
+    "commit_short": "6fd916f",
+    "dirty": true
+  },
+  "policy": {
+    "max_rework_rounds_per_step": 6
+  }
+}

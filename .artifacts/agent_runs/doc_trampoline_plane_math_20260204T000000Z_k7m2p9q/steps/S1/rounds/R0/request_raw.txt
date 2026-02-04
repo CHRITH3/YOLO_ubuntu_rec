@@ -1,0 +1,23 @@
+PARAMS
+action: create
+backend: codex
+run_id: doc_trampoline_plane_math_20260204T000000Z_k7m2p9q
+step_id: S1
+round: 0
+thread_id: null
+
+PROMPT
+{"task_kind":"step","task_id":"doc_trampoline_plane_math","run_id":"doc_trampoline_plane_math_20260204T000000Z_k7m2p9q","step_id":"S1","step_title":"Append math basics page to trampoline plane doc","step_description":"Append a new section/page to docs/20260204蹦床平面拟合.md that explains math basics for C++ beginners: plane equation, RANSAC idea, and least-squares/SVD intuition. Keep it concise, in Chinese, and aligned with the existing doc tone. Do not change other files.
+
+Output Contract (MUST follow exactly, missing any section => REWORK):
+1. Step Identification
+2. Summary of Work
+3. Files Changed
+4. Commands Executed
+5. Verification Results
+6. Logs / Artifacts
+7. Risks & Limitations
+8. Reproduction Guide","acceptance_criteria":["docs/20260204蹦床平面拟合.md includes a new math-basics section/page in Chinese for beginners.","Section covers: plane equation ax+by+cz+d=0, RANSAC concept, and least-squares/SVD refinement intuition.","Content is concise, practical, and consistent with the rest of the document.","Only docs/20260204蹦床平面拟合.md is modified.","Commands (if any) are reported; verification is explicitly stated."],"context":{"repo_overview":"YOLO_rec C++ project; doc located in docs/20260204蹦床平面拟合.md.","run_dir":".artifacts/agent_runs/doc_trampoline_plane_math_20260204T000000Z_k7m2p9q/","related_files":["docs/20260204蹦床平面拟合.md"],"constraints":["Write in Chinese for C++ beginner audience","Align with existing doc tone","Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"]},"expected_outputs":["Updated docs/20260204蹦床平面拟合.md"],"allowed_actions":["edit repo files","write/update docs","run read-only inspection commands"]}
+
+REQUEST_JSON
+null

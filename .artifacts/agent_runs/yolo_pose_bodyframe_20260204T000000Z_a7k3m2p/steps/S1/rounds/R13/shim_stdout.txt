@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"019c2708-3361-7bb3-a5ec-296bc9fa32e5"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"/usr/bin/zsh -lc \"sed -n '1,200p' app/camera_intrinsics.h\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"/usr/bin/zsh -lc \"sed -n '1,200p' app/camera_intrinsics.h\"","aggregated_output":"#ifndef CAMERA_INTRINSICS_H_\n#define CAMERA_INTRINSICS_H_\n\n#include <opencv2/opencv.hpp>\n\nextern cv::Mat cv_in_left;\nextern cv::Mat cv_in_left_inv;\n\n#endif  // CAMERA_INTRINSICS_H_\n","exit_code":0,"status":"completed"}}

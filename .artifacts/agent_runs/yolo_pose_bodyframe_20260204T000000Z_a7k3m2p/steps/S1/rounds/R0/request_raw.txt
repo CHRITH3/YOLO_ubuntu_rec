@@ -1,0 +1,53 @@
+PARAMS
+action: create
+backend: codex
+run_id: yolo_pose_bodyframe_20260204T000000Z_a7k3m2p
+step_id: S1
+round: 0
+thread_id: null
+
+PROMPT
+{"task_kind":"step","task_id":"yolo_pose_bodyframe","run_id":"yolo_pose_bodyframe_20260204T000000Z_a7k3m2p","step_id":"S1","step_title":"Implement 3D skeleton, body frame, rotation metrics, and visualization","step_description":"Update the YOLO pose pipeline to compute depth for all keypoints (following the existing hip depth method) and convert all keypoints to trampoline coordinates, then build a per-frame body frame (x_body/y_body/z_body) with orthonormalization. Compute R_rel = R_bed^T * R_body and convert to quaternion; compute per-axis rotation angles and cumulative counts (flip/twist/side flip), and add visualization of body axes in the YOLO Pose window plus a new window showing body-frame metrics and 3D skeleton values. Keep changes localized to relevant files and preserve existing behavior where not specified.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide","acceptance_criteria":["All pose keypoints obtain depth using the same pipeline as the hip keypoints (camera coordinates -> trampoline coordinates -> median-in-ROI depth processing) and produce a 3D skeleton in trampoline coordinates.","Per-frame body frame axes (x_body, y_body, z_body) are computed and orthonormalized; R_rel = R_bed^T * R_body is computed and converted to quaternion.","Per-axis rotation angles (about x/y/z body axes) are derived and cumulative rotation is tracked to compute flip/twist/side-flip counts.","YOLO Pose window renders the body axes visualization in real time, and a new window displays 3D skeleton coordinates, body-frame quaternion, rotation angles, and cumulative counts.","Only task-relevant files are modified and code builds without errors (or verification steps are clearly documented if not run)."],"context":{"repo_overview":"YOLO pose detection pipeline with depth/trampoline coordinate conversion in get_pose_indemind_left.cpp.","run_dir":".artifacts/agent_runs/yolo_pose_bodyframe_20260204T000000Z_a7k3m2p/","related_files":["get_pose_indemind_left.cpp","pose_utils.cpp","pose_utils.h","yolo_pose_detector.cpp","yolo_pose_detector.h","CMakeLists.txt"],"constraints":["Follow existing depth acquisition and trampoline coordinate conversion used for hip keypoints.","Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"]},"expected_outputs":["Updated get_pose_indemind_left.cpp with 3D skeleton, body frame, quaternion, rotation metrics, and UI windows","Any auxiliary updates in pose_utils.* or yolo_pose_detector.* if needed","Optional build/test command outputs under .artifacts/agent_runs/yolo_pose_bodyframe_20260204T000000Z_a7k3m2p/"] ,"allowed_actions":["edit repo files","run build/test commands","write/update docs"]}
+
+REQUEST_JSON
+{
+  "task_kind": "step",
+  "task_id": "yolo_pose_bodyframe",
+  "run_id": "yolo_pose_bodyframe_20260204T000000Z_a7k3m2p",
+  "step_id": "S1",
+  "step_title": "Implement 3D skeleton, body frame, rotation metrics, and visualization",
+  "step_description": "Update the YOLO pose pipeline to compute depth for all keypoints (following the existing hip depth method) and convert all keypoints to trampoline coordinates, then build a per-frame body frame (x_body/y_body/z_body) with orthonormalization. Compute R_rel = R_bed^T * R_body and convert to quaternion; compute per-axis rotation angles and cumulative counts (flip/twist/side flip), and add visualization of body axes in the YOLO Pose window plus a new window showing body-frame metrics and 3D skeleton values. Keep changes localized to relevant files and preserve existing behavior where not specified.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "All pose keypoints obtain depth using the same pipeline as the hip keypoints (camera coordinates -> trampoline coordinates -> median-in-ROI depth processing) and produce a 3D skeleton in trampoline coordinates.",
+    "Per-frame body frame axes (x_body, y_body, z_body) are computed and orthonormalized; R_rel = R_bed^T * R_body is computed and converted to quaternion.",
+    "Per-axis rotation angles (about x/y/z body axes) are derived and cumulative rotation is tracked to compute flip/twist/side-flip counts.",
+    "YOLO Pose window renders the body axes visualization in real time, and a new window displays 3D skeleton coordinates, body-frame quaternion, rotation angles, and cumulative counts.",
+    "Only task-relevant files are modified and code builds without errors (or verification steps are clearly documented if not run)."
+  ],
+  "context": {
+    "repo_overview": "YOLO pose detection pipeline with depth/trampoline coordinate conversion in get_pose_indemind_left.cpp.",
+    "run_dir": ".artifacts/agent_runs/yolo_pose_bodyframe_20260204T000000Z_a7k3m2p/",
+    "related_files": [
+      "get_pose_indemind_left.cpp",
+      "pose_utils.cpp",
+      "pose_utils.h",
+      "yolo_pose_detector.cpp",
+      "yolo_pose_detector.h",
+      "CMakeLists.txt"
+    ],
+    "constraints": [
+      "Follow existing depth acquisition and trampoline coordinate conversion used for hip keypoints.",
+      "Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"
+    ]
+  },
+  "expected_outputs": [
+    "Updated get_pose_indemind_left.cpp with 3D skeleton, body frame, quaternion, rotation metrics, and UI windows",
+    "Any auxiliary updates in pose_utils.* or yolo_pose_detector.* if needed",
+    "Optional build/test command outputs under .artifacts/agent_runs/yolo_pose_bodyframe_20260204T000000Z_a7k3m2p/"
+  ],
+  "allowed_actions": [
+    "edit repo files",
+    "run build/test commands",
+    "write/update docs"
+  ]
+}

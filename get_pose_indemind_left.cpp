@@ -30,9 +30,11 @@
 #include <sstream>
 #include <chrono>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <deque>
+#include <limits>
 
 using namespace indem;
 
@@ -43,6 +45,275 @@ using namespace indem;
 
 // Performance optimization: limit queue size to prevent backlog
 #define MAX_QUEUE_SIZE 2
+
+struct Pose3DInfo {
+  std::vector<cv::Point3d> kp_cam;
+  std::vector<cv::Point3d> kp_bed;
+  std::vector<bool> kp_valid;
+  bool pelvis_valid = false;
+  cv::Point3d pelvis_cam{0, 0, 0};
+  cv::Point3d pelvis_bed{0, 0, 0};
+};
+
+struct BodyFrame {
+  bool valid = false;
+  cv::Point3d origin_bed{0, 0, 0};
+  cv::Mat R_body_bed = cv::Mat::eye(3, 3, CV_64F);
+  cv::Mat R_body_cam = cv::Mat::eye(3, 3, CV_64F);
+  cv::Mat R_rel = cv::Mat::eye(3, 3, CV_64F);
+  cv::Vec4d quat{1.0, 0.0, 0.0, 0.0}; // w, x, y, z
+  cv::Vec3d euler_rad{0.0, 0.0, 0.0}; // roll(x), pitch(y), yaw(z)
+};
+
+struct RotationTracker {
+  bool initialized = false;
+  cv::Vec3d last_angles{0.0, 0.0, 0.0};
+  cv::Vec3d cumulative{0.0, 0.0, 0.0};
+
+  void Reset() {
+    initialized = false;
+    last_angles = cv::Vec3d(0.0, 0.0, 0.0);
+    cumulative = cv::Vec3d(0.0, 0.0, 0.0);
+  }
+
+  void Update(const cv::Vec3d &angles_rad) {
+    if (!initialized) {
+      last_angles = angles_rad;
+      initialized = true;
+      return;
+    }
+    for (int i = 0; i < 3; ++i) {
+      double delta = angles_rad[i] - last_angles[i];
+      while (delta > M_PI) delta -= 2.0 * M_PI;
+      while (delta < -M_PI) delta += 2.0 * M_PI;
+      cumulative[i] += delta;
+      last_angles[i] = angles_rad[i];
+    }
+  }
+};
+
+static bool NormalizeVec(const cv::Vec3d &v, cv::Vec3d &out) {
+  double n = std::sqrt(v.dot(v));
+  if (n < 1e-6) {
+    return false;
+  }
+  out = v / n;
+  return true;
+}
+
+static cv::Vec4d RotationMatrixToQuaternion(const cv::Mat &R) {
+  cv::Vec4d q(1.0, 0.0, 0.0, 0.0);
+  if (R.empty()) {
+    return q;
+  }
+  double trace = R.at<double>(0, 0) + R.at<double>(1, 1) + R.at<double>(2, 2);
+  if (trace > 0.0) {
+    double s = std::sqrt(trace + 1.0) * 2.0;
+    q[0] = 0.25 * s;
+    q[1] = (R.at<double>(2, 1) - R.at<double>(1, 2)) / s;
+    q[2] = (R.at<double>(0, 2) - R.at<double>(2, 0)) / s;
+    q[3] = (R.at<double>(1, 0) - R.at<double>(0, 1)) / s;
+  } else {
+    if (R.at<double>(0, 0) > R.at<double>(1, 1) &&
+        R.at<double>(0, 0) > R.at<double>(2, 2)) {
+      double s = std::sqrt(1.0 + R.at<double>(0, 0) - R.at<double>(1, 1) - R.at<double>(2, 2)) * 2.0;
+      q[0] = (R.at<double>(2, 1) - R.at<double>(1, 2)) / s;
+      q[1] = 0.25 * s;
+      q[2] = (R.at<double>(0, 1) + R.at<double>(1, 0)) / s;
+      q[3] = (R.at<double>(0, 2) + R.at<double>(2, 0)) / s;
+    } else if (R.at<double>(1, 1) > R.at<double>(2, 2)) {
+      double s = std::sqrt(1.0 + R.at<double>(1, 1) - R.at<double>(0, 0) - R.at<double>(2, 2)) * 2.0;
+      q[0] = (R.at<double>(0, 2) - R.at<double>(2, 0)) / s;
+      q[1] = (R.at<double>(0, 1) + R.at<double>(1, 0)) / s;
+      q[2] = 0.25 * s;
+      q[3] = (R.at<double>(1, 2) + R.at<double>(2, 1)) / s;
+    } else {
+      double s = std::sqrt(1.0 + R.at<double>(2, 2) - R.at<double>(0, 0) - R.at<double>(1, 1)) * 2.0;
+      q[0] = (R.at<double>(1, 0) - R.at<double>(0, 1)) / s;
+      q[1] = (R.at<double>(0, 2) + R.at<double>(2, 0)) / s;
+      q[2] = (R.at<double>(1, 2) + R.at<double>(2, 1)) / s;
+      q[3] = 0.25 * s;
+    }
+  }
+  return q;
+}
+
+static cv::Vec3d RotationMatrixToEulerXYZ(const cv::Mat &R) {
+  if (R.empty()) {
+    return cv::Vec3d(0.0, 0.0, 0.0);
+  }
+  double r00 = R.at<double>(0, 0);
+  double r10 = R.at<double>(1, 0);
+  double r20 = R.at<double>(2, 0);
+  double r21 = R.at<double>(2, 1);
+  double r22 = R.at<double>(2, 2);
+
+  double pitch = std::asin(std::max(-1.0, std::min(1.0, -r20)));
+  double roll = std::atan2(r21, r22);
+  double yaw = std::atan2(r10, r00);
+  return cv::Vec3d(roll, pitch, yaw);
+}
+
+static bool ProjectPoint(const cv::Point3d &p_cam, const cv::Mat &K, cv::Point &out) {
+  if (p_cam.z <= 0.0 || K.empty()) {
+    return false;
+  }
+  cv::Mat pt_cam = (cv::Mat_<double>(3, 1) << p_cam.x, p_cam.y, p_cam.z);
+  cv::Mat pt_img = K * pt_cam / p_cam.z;
+  out = cv::Point(static_cast<int>(pt_img.at<double>(0, 0)),
+                  static_cast<int>(pt_img.at<double>(1, 0)));
+  return true;
+}
+
+static void DrawBodyFrameBox(cv::Mat &image,
+                             const cv::Mat &R_body_cam,
+                             const cv::Point3d &center_cam,
+                             double half_x,
+                             double half_y,
+                             double half_z,
+                             const cv::Mat &K) {
+  if (R_body_cam.empty() || K.empty()) {
+    return;
+  }
+
+  std::array<cv::Point3d, 8> corners_body = {
+      cv::Point3d(-half_x, -half_y, -half_z),
+      cv::Point3d(half_x, -half_y, -half_z),
+      cv::Point3d(half_x, half_y, -half_z),
+      cv::Point3d(-half_x, half_y, -half_z),
+      cv::Point3d(-half_x, -half_y, half_z),
+      cv::Point3d(half_x, -half_y, half_z),
+      cv::Point3d(half_x, half_y, half_z),
+      cv::Point3d(-half_x, half_y, half_z)
+  };
+
+  std::array<cv::Point, 8> corners_2d;
+  std::array<bool, 8> visible{};
+
+  for (size_t i = 0; i < corners_body.size(); ++i) {
+    const cv::Point3d &p_body = corners_body[i];
+    cv::Point3d p_cam(
+        center_cam.x + R_body_cam.at<double>(0, 0) * p_body.x +
+            R_body_cam.at<double>(0, 1) * p_body.y + R_body_cam.at<double>(0, 2) * p_body.z,
+        center_cam.y + R_body_cam.at<double>(1, 0) * p_body.x +
+            R_body_cam.at<double>(1, 1) * p_body.y + R_body_cam.at<double>(1, 2) * p_body.z,
+        center_cam.z + R_body_cam.at<double>(2, 0) * p_body.x +
+            R_body_cam.at<double>(2, 1) * p_body.y + R_body_cam.at<double>(2, 2) * p_body.z);
+    visible[i] = ProjectPoint(p_cam, K, corners_2d[i]);
+  }
+
+  auto draw_edge = [&](int a, int b) {
+    if (visible[a] && visible[b]) {
+      cv::line(image, corners_2d[a], corners_2d[b], cv::Scalar(0, 200, 255), 2, cv::LINE_AA);
+    }
+  };
+
+  draw_edge(0, 1);
+  draw_edge(1, 2);
+  draw_edge(2, 3);
+  draw_edge(3, 0);
+  draw_edge(4, 5);
+  draw_edge(5, 6);
+  draw_edge(6, 7);
+  draw_edge(7, 4);
+  draw_edge(0, 4);
+  draw_edge(1, 5);
+  draw_edge(2, 6);
+  draw_edge(3, 7);
+}
+
+static bool BuildBodyFrameFromPose(const PoseResult &pose,
+                                   const Pose3DInfo &info,
+                                   const cv::Mat &R_bed_cam,
+                                   BodyFrame &out) {
+  if (R_bed_cam.empty()) {
+    return false;
+  }
+
+  auto kp_ok = [&](int idx, cv::Point3d &pt) -> bool {
+    if (idx < 0 || idx >= static_cast<int>(info.kp_bed.size())) {
+      return false;
+    }
+    if (!info.kp_valid[idx]) {
+      return false;
+    }
+    if (pose.keypoints[idx].confidence < 0.3f) {
+      return false;
+    }
+    pt = info.kp_bed[idx];
+    return true;
+  };
+
+  cv::Point3d lh, rh, ls, rs;
+  bool lh_ok = kp_ok(LEFT_HIP, lh);
+  bool rh_ok = kp_ok(RIGHT_HIP, rh);
+  bool ls_ok = kp_ok(LEFT_SHOULDER, ls);
+  bool rs_ok = kp_ok(RIGHT_SHOULDER, rs);
+
+  if ((!lh_ok && !rh_ok) || (!ls_ok && !rs_ok)) {
+    return false;
+  }
+
+  cv::Point3d pelvis = lh_ok && rh_ok
+                           ? cv::Point3d(0.5 * (lh.x + rh.x), 0.5 * (lh.y + rh.y), 0.5 * (lh.z + rh.z))
+                           : (lh_ok ? lh : rh);
+
+  cv::Point3d shoulders = ls_ok && rs_ok
+                              ? cv::Point3d(0.5 * (ls.x + rs.x), 0.5 * (ls.y + rs.y), 0.5 * (ls.z + rs.z))
+                              : (ls_ok ? ls : rs);
+
+  // Define body axes in bed coordinates:
+  // y_body: hip_mid -> shoulder_mid
+  // x_body: right_hip -> left_hip (left minus right)
+  // z_body: x_body × y_body
+  cv::Vec3d y_raw(shoulders.x - pelvis.x, shoulders.y - pelvis.y, shoulders.z - pelvis.z);
+  cv::Vec3d x_raw(0.0, 0.0, 0.0);
+  if (lh_ok && rh_ok) {
+    x_raw = cv::Vec3d(lh.x - rh.x, lh.y - rh.y, lh.z - rh.z);
+  } else if (ls_ok && rs_ok) {
+    x_raw = cv::Vec3d(ls.x - rs.x, ls.y - rs.y, ls.z - rs.z);
+  } else {
+    return false;
+  }
+
+  cv::Vec3d x_axis;
+  if (!NormalizeVec(x_raw, x_axis)) {
+    return false;
+  }
+
+  // Gram-Schmidt: make y orthogonal to x, then normalize.
+  cv::Vec3d y_orth = y_raw - x_axis * (y_raw.dot(x_axis));
+  cv::Vec3d y_axis;
+  if (!NormalizeVec(y_orth, y_axis)) {
+    return false;
+  }
+
+  cv::Vec3d z_axis = x_axis.cross(y_axis);
+  if (!NormalizeVec(z_axis, z_axis)) {
+    return false;
+  }
+
+  out.origin_bed = pelvis;
+  out.R_body_bed = cv::Mat::eye(3, 3, CV_64F);
+  out.R_body_bed.at<double>(0, 0) = x_axis[0];
+  out.R_body_bed.at<double>(1, 0) = x_axis[1];
+  out.R_body_bed.at<double>(2, 0) = x_axis[2];
+
+  out.R_body_bed.at<double>(0, 1) = y_axis[0];
+  out.R_body_bed.at<double>(1, 1) = y_axis[1];
+  out.R_body_bed.at<double>(2, 1) = y_axis[2];
+
+  out.R_body_bed.at<double>(0, 2) = z_axis[0];
+  out.R_body_bed.at<double>(1, 2) = z_axis[1];
+  out.R_body_bed.at<double>(2, 2) = z_axis[2];
+
+  out.R_body_cam = R_bed_cam * out.R_body_bed;
+  out.R_rel = R_bed_cam.t() * out.R_body_cam;
+  out.quat = RotationMatrixToQuaternion(out.R_rel);
+  out.euler_rad = RotationMatrixToEulerXYZ(out.R_rel);
+  out.valid = true;
+  return true;
+}
 
 int main(int argc, char **argv) {
   (void)argc;
@@ -187,7 +458,6 @@ int main(int argc, char **argv) {
 
   std::cout << "\n=== Controls ===\n" << std::endl;
   std::cout << "  q / ESC : Quit" << std::endl;
-  std::cout << "  b       : Toggle bounding box" << std::endl;
   std::cout << "  k       : Toggle keypoints" << std::endl;
   std::cout << "  t       : Toggle skeleton" << std::endl;
   std::cout << "  i       : Toggle info overlay" << std::endl;
@@ -204,10 +474,16 @@ int main(int argc, char **argv) {
   std::cout << "  s       : Save landing points to CSV\n" << std::endl;
 
   // Display options
-  bool show_bbox = true;
+  bool show_bbox = false;
   bool show_keypoints = true;
   bool show_skeleton = true;
   bool show_info = true;
+
+  // Body frame tracking state
+  RotationTracker rotation_tracker;
+  cv::Point3d last_tracked_pelvis_cam(0, 0, 0);
+  bool has_tracked_person = false;
+  int missing_body_frames = 0;
 
   int frame_save_count = 0;
 
@@ -317,7 +593,6 @@ int main(int argc, char **argv) {
 
       // Display current settings
       std::string settings = "";
-      if (show_bbox) settings += "B";
       if (show_keypoints) settings += "K";
       if (show_skeleton) settings += "S";
       if (show_info) settings += "I";
@@ -332,138 +607,146 @@ int main(int argc, char **argv) {
                     FONT_FACE, 1.5, cv::Scalar(0, 0, 255), 2);
       }
 
-      // Calculate hip coordinates for all detected persons and pass to region window
+      // Calculate 3D keypoints (camera + trampoline coordinates) and hip info
       std::vector<DepthRegion::HipInfo> hip_data_list;
+      std::vector<Pose3DInfo> pose_3d_infos(poses.size());
+      BodyFrame tracked_body_frame;
+      int tracked_pose_index = -1;
+
+      bool bed_ready = depth_region.IsCoordSystemReady();
+      cv::Mat R_bed_cam;
+      cv::Point3d bed_origin;
+      if (bed_ready) {
+        depth_region.GetCoordinateSystem(R_bed_cam, bed_origin);
+        (void)bed_origin;
+      }
+
       auto depth_start = std::chrono::steady_clock::now();
       if (!depth_data.empty() && !poses.empty()) {
-        int person_id = 1;
-        for (const auto& pose : poses) {
-          // if (pose.keypoints.size() > 11) {
-          //   const auto& left_hip = pose.keypoints[11];
-          //
-          //   if (left_hip.confidence > 0.6f) {
-          //     int px = static_cast<int>(left_hip.x);
-          //     int py = static_cast<int>(left_hip.y);
-          //
-          //     if (px >= 0 && px < depth_data.cols && py >= 0 && py < depth_data.rows) {
-          //       double Z = depth_data.at<ushort>(py, px);
-          //
-          //       if (Z > 0 && Z < 10000) {
-          //         // Calculate 3D coordinates in camera coordinate system
-          //         cv::Mat kp_img_cor(3, 1, CV_64FC1);
-          //         kp_img_cor.at<double>(0, 0) = static_cast<double>(px);
-          //         kp_img_cor.at<double>(1, 0) = static_cast<double>(py);
-          //         kp_img_cor.at<double>(2, 0) = 1.0;
-          //
-          //         cv::Mat kp_camera_cor = cv_in_left_inv * Z * kp_img_cor;
-          //
-          //         double X = kp_camera_cor.at<double>(0, 0);
-          //         double Y = kp_camera_cor.at<double>(1, 0);
-          //         double Z_val = kp_camera_cor.at<double>(2, 0);
-          //
-          //         // Create hip info
-          //         DepthRegion::HipInfo hip_info;
-          //         hip_info.person_id = person_id;
-          //         hip_info.camera_pos = cv::Point3d(X, Y, Z_val);
-          //         hip_info.has_new_frame = depth_region.IsCoordSystemReady();
-          //
-          //         if (hip_info.has_new_frame) {
-          //           hip_info.new_frame_pos = depth_region.TransformToNewFrame(hip_info.camera_pos);
-          //         }
-          //
-          //         hip_data_list.push_back(hip_info);
-          //       }
-          //     }
-          //   }
-          // }
+        for (size_t p = 0; p < poses.size(); ++p) {
+          const auto &pose = poses[p];
+          Pose3DInfo info;
+          info.kp_cam.assign(pose.keypoints.size(), cv::Point3d(0, 0, 0));
+          info.kp_bed.assign(pose.keypoints.size(), cv::Point3d(0, 0, 0));
+          info.kp_valid.assign(pose.keypoints.size(), false);
 
-          // Use pelvis point (avg of L/R hip) for stability: keypoints 11 & 12
-          //髋部左右平均
-          if (pose.keypoints.size() > 12) {
-            const auto& lh = pose.keypoints[11];
-            const auto& rh = pose.keypoints[12];
-
-            bool lh_ok = lh.confidence > 0.50f;
-            bool rh_ok = rh.confidence > 0.50f;
-            if (!lh_ok && !rh_ok) { person_id++; continue; }
-
-            int px = 0, py = 0;
-            if (lh_ok && rh_ok) {
-              px = static_cast<int>(0.5f * (lh.x + rh.x));
-              py = static_cast<int>(0.5f * (lh.y + rh.y));
-            } else if (lh_ok) {
-              px = static_cast<int>(lh.x);
-              py = static_cast<int>(lh.y);
-            } else {
-              px = static_cast<int>(rh.x);
-              py = static_cast<int>(rh.y);
+          for (size_t k = 0; k < pose.keypoints.size(); ++k) {
+            const auto &kp = pose.keypoints[k];
+            if (kp.confidence < 0.3f) {
+              continue;
             }
 
-            if (px >= 0 && px < depth_data.cols && py >= 0 && py < depth_data.rows) {
-              // Robust depth sampling (median over local window)
-              uint16_t z_mm = 0;
-              if (!RobustDepthMedianU16(depth_data, px, py, /*r=*/3, z_mm)) {
-                person_id++;
-                continue;
-              }
-              double Z = static_cast<double>(z_mm);  // mm
-
-              // Calculate 3D coordinates in camera coordinate system
-              cv::Mat kp_img_cor(3, 1, CV_64FC1);
-              kp_img_cor.at<double>(0, 0) = static_cast<double>(px);
-              kp_img_cor.at<double>(1, 0) = static_cast<double>(py);
-              kp_img_cor.at<double>(2, 0) = 1.0;
-
-              cv::Mat kp_camera_cor = cv_in_left_inv * Z * kp_img_cor;
-
-              double X = kp_camera_cor.at<double>(0, 0);
-              double Y = kp_camera_cor.at<double>(1, 0);
-              double Z_val = kp_camera_cor.at<double>(2, 0);
-
-              // Create hip info
-              DepthRegion::HipInfo hip_info;
-              hip_info.person_id = person_id;
-              hip_info.camera_pos = cv::Point3d(X, Y, Z_val);
-              hip_info.has_new_frame = depth_region.IsCoordSystemReady();
-
-              if (hip_info.has_new_frame) {
-                hip_info.new_frame_pos = depth_region.TransformToNewFrame(hip_info.camera_pos);
-              }
-
-              hip_data_list.push_back(hip_info);
+            int px = static_cast<int>(kp.x);
+            int py = static_cast<int>(kp.y);
+            if (px < 0 || px >= depth_data.cols || py < 0 || py >= depth_data.rows) {
+              continue;
             }
-          } else if (pose.keypoints.size() > 11) {
-            // Fallback: only left hip exists (older models / configs)
-            const auto& left_hip = pose.keypoints[11];
-            if (left_hip.confidence > 0.60f) {
-              int px = static_cast<int>(left_hip.x);
-              int py = static_cast<int>(left_hip.y);
-              if (px >= 0 && px < depth_data.cols && py >= 0 && py < depth_data.rows) {
-                uint16_t z_mm = 0;
-                if (!RobustDepthMedianU16(depth_data, px, py, /*r=*/3, z_mm)) {
-                  person_id++;
-                  continue;
-                }
-                double Z = static_cast<double>(z_mm);
-                cv::Mat kp_img_cor(3, 1, CV_64FC1);
-                kp_img_cor.at<double>(0, 0) = static_cast<double>(px);
-                kp_img_cor.at<double>(1, 0) = static_cast<double>(py);
-                kp_img_cor.at<double>(2, 0) = 1.0;
-                cv::Mat kp_camera_cor = cv_in_left_inv * Z * kp_img_cor;
-                DepthRegion::HipInfo hip_info;
-                hip_info.person_id = person_id;
-                hip_info.camera_pos = cv::Point3d(kp_camera_cor.at<double>(0,0),
-                                                  kp_camera_cor.at<double>(1,0),
-                                                  kp_camera_cor.at<double>(2,0));
-                hip_info.has_new_frame = depth_region.IsCoordSystemReady();
-                if (hip_info.has_new_frame) {
-                  hip_info.new_frame_pos = depth_region.TransformToNewFrame(hip_info.camera_pos);
-                }
-                hip_data_list.push_back(hip_info);
+
+            uint16_t z_mm = 0;
+            if (!RobustDepthMedianU16(depth_data, px, py, /*r=*/3, z_mm)) {
+              continue;
+            }
+            double Z = static_cast<double>(z_mm);
+
+            cv::Mat kp_img_cor(3, 1, CV_64FC1);
+            kp_img_cor.at<double>(0, 0) = static_cast<double>(px);
+            kp_img_cor.at<double>(1, 0) = static_cast<double>(py);
+            kp_img_cor.at<double>(2, 0) = 1.0;
+
+            cv::Mat kp_camera_cor = cv_in_left_inv * Z * kp_img_cor;
+            cv::Point3d cam_pt(kp_camera_cor.at<double>(0, 0),
+                               kp_camera_cor.at<double>(1, 0),
+                               kp_camera_cor.at<double>(2, 0));
+
+            info.kp_cam[k] = cam_pt;
+            info.kp_valid[k] = true;
+
+            if (bed_ready) {
+              info.kp_bed[k] = depth_region.TransformToNewFrame(cam_pt);
+            }
+          }
+
+          bool lh_ok = pose.keypoints.size() > LEFT_HIP &&
+                       pose.keypoints[LEFT_HIP].confidence > 0.5f &&
+                       info.kp_valid[LEFT_HIP];
+          bool rh_ok = pose.keypoints.size() > RIGHT_HIP &&
+                       pose.keypoints[RIGHT_HIP].confidence > 0.5f &&
+                       info.kp_valid[RIGHT_HIP];
+
+          if (lh_ok || rh_ok) {
+            cv::Point3d pelvis_cam = lh_ok && rh_ok
+                                         ? cv::Point3d(0.5 * (info.kp_cam[LEFT_HIP].x + info.kp_cam[RIGHT_HIP].x),
+                                                      0.5 * (info.kp_cam[LEFT_HIP].y + info.kp_cam[RIGHT_HIP].y),
+                                                      0.5 * (info.kp_cam[LEFT_HIP].z + info.kp_cam[RIGHT_HIP].z))
+                                         : (lh_ok ? info.kp_cam[LEFT_HIP] : info.kp_cam[RIGHT_HIP]);
+
+            info.pelvis_cam = pelvis_cam;
+            info.pelvis_valid = true;
+            if (bed_ready) {
+              info.pelvis_bed = depth_region.TransformToNewFrame(pelvis_cam);
+            }
+
+            DepthRegion::HipInfo hip_info;
+            hip_info.person_id = static_cast<int>(p) + 1;
+            hip_info.camera_pos = pelvis_cam;
+            hip_info.has_new_frame = bed_ready;
+            if (hip_info.has_new_frame) {
+              hip_info.new_frame_pos = info.pelvis_bed;
+            }
+            hip_data_list.push_back(hip_info);
+          }
+
+          pose_3d_infos[p] = info;
+          if (bed_ready) {
+            for (size_t k = 0; k < pose.keypoints.size(); ++k) {
+              if (info.kp_valid[k]) {
+                poses[p].keypoints[k].pos3d = cv::Point3f(
+                    static_cast<float>(info.kp_bed[k].x),
+                    static_cast<float>(info.kp_bed[k].y),
+                    static_cast<float>(info.kp_bed[k].z));
               }
             }
           }
-          person_id++;
+        }
+      }
+
+      if (bed_ready && !pose_3d_infos.empty()) {
+        double best_d2 = std::numeric_limits<double>::infinity();
+        for (size_t p = 0; p < pose_3d_infos.size(); ++p) {
+          if (!pose_3d_infos[p].pelvis_valid) {
+            continue;
+          }
+          if (!has_tracked_person) {
+            tracked_pose_index = static_cast<int>(p);
+            break;
+          }
+          double dx = pose_3d_infos[p].pelvis_cam.x - last_tracked_pelvis_cam.x;
+          double dy = pose_3d_infos[p].pelvis_cam.y - last_tracked_pelvis_cam.y;
+          double dz = pose_3d_infos[p].pelvis_cam.z - last_tracked_pelvis_cam.z;
+          double d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 < best_d2) {
+            best_d2 = d2;
+            tracked_pose_index = static_cast<int>(p);
+          }
+        }
+
+        if (tracked_pose_index >= 0) {
+          has_tracked_person = true;
+          last_tracked_pelvis_cam = pose_3d_infos[tracked_pose_index].pelvis_cam;
+          BuildBodyFrameFromPose(poses[tracked_pose_index], pose_3d_infos[tracked_pose_index],
+                                 R_bed_cam, tracked_body_frame);
+        } else {
+          has_tracked_person = false;
+        }
+      }
+
+      if (tracked_body_frame.valid) {
+        missing_body_frames = 0;
+        rotation_tracker.Update(tracked_body_frame.euler_rad);
+      } else {
+        missing_body_frames++;
+        if (missing_body_frames >= 3) {
+          rotation_tracker.Reset();
         }
       }
       auto depth_end = std::chrono::steady_clock::now();
@@ -516,6 +799,108 @@ int main(int argc, char **argv) {
         depth_region.DrawRect(display);
       }
 
+      // Draw body axes for tracked person
+      if (tracked_body_frame.valid && tracked_pose_index >= 0 &&
+          tracked_pose_index < static_cast<int>(pose_3d_infos.size()) &&
+          pose_3d_infos[tracked_pose_index].pelvis_valid) {
+        const double axis_length = 260.0;
+        const int axis_thickness = 1;
+        const cv::Point3d &pelvis_cam = pose_3d_infos[tracked_pose_index].pelvis_cam;
+
+        cv::Point3d x_end(pelvis_cam.x + tracked_body_frame.R_body_cam.at<double>(0, 0) * axis_length,
+                          pelvis_cam.y + tracked_body_frame.R_body_cam.at<double>(1, 0) * axis_length,
+                          pelvis_cam.z + tracked_body_frame.R_body_cam.at<double>(2, 0) * axis_length);
+        cv::Point3d y_end(pelvis_cam.x + tracked_body_frame.R_body_cam.at<double>(0, 1) * axis_length,
+                          pelvis_cam.y + tracked_body_frame.R_body_cam.at<double>(1, 1) * axis_length,
+                          pelvis_cam.z + tracked_body_frame.R_body_cam.at<double>(2, 1) * axis_length);
+        cv::Point3d z_end(pelvis_cam.x + tracked_body_frame.R_body_cam.at<double>(0, 2) * axis_length,
+                          pelvis_cam.y + tracked_body_frame.R_body_cam.at<double>(1, 2) * axis_length,
+                          pelvis_cam.z + tracked_body_frame.R_body_cam.at<double>(2, 2) * axis_length);
+
+        cv::Point origin_2d, x_2d, y_2d, z_2d;
+        if (ProjectPoint(pelvis_cam, cv_in_left, origin_2d)) {
+          if (ProjectPoint(x_end, cv_in_left, x_2d)) {
+            cv::arrowedLine(display, origin_2d, x_2d, cv::Scalar(0, 0, 255), axis_thickness, cv::LINE_AA, 0, 0.2);
+            cv::putText(display, "Xb", x_2d + cv::Point(6, 6),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+          }
+          if (ProjectPoint(y_end, cv_in_left, y_2d)) {
+            cv::arrowedLine(display, origin_2d, y_2d, cv::Scalar(0, 255, 0), axis_thickness, cv::LINE_AA, 0, 0.2);
+            cv::putText(display, "Yb", y_2d + cv::Point(6, 6),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2, cv::LINE_AA);
+          }
+          if (ProjectPoint(z_end, cv_in_left, z_2d)) {
+            cv::arrowedLine(display, origin_2d, z_2d, cv::Scalar(255, 0, 0), axis_thickness, cv::LINE_AA, 0, 0.2);
+            cv::putText(display, "Zb", z_2d + cv::Point(6, 6),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 0, 0), 2, cv::LINE_AA);
+          }
+        }
+
+        auto get_kp_cam = [&](int idx, cv::Point3d &pt) -> bool {
+          if (idx < 0 || idx >= static_cast<int>(pose_3d_infos[tracked_pose_index].kp_cam.size())) {
+            return false;
+          }
+          if (!pose_3d_infos[tracked_pose_index].kp_valid[idx]) {
+            return false;
+          }
+          pt = pose_3d_infos[tracked_pose_index].kp_cam[idx];
+          return true;
+        };
+
+        cv::Point3d lh, rh, ls, rs;
+        bool lh_ok = get_kp_cam(LEFT_HIP, lh);
+        bool rh_ok = get_kp_cam(RIGHT_HIP, rh);
+        bool ls_ok = get_kp_cam(LEFT_SHOULDER, ls);
+        bool rs_ok = get_kp_cam(RIGHT_SHOULDER, rs);
+
+        cv::Point3d hip_mid = lh_ok && rh_ok ? cv::Point3d(0.5 * (lh.x + rh.x),
+                                                           0.5 * (lh.y + rh.y),
+                                                           0.5 * (lh.z + rh.z))
+                                             : (lh_ok ? lh : rh);
+        cv::Point3d shoulder_mid = ls_ok && rs_ok ? cv::Point3d(0.5 * (ls.x + rs.x),
+                                                                0.5 * (ls.y + rs.y),
+                                                                0.5 * (ls.z + rs.z))
+                                                  : (ls_ok ? ls : rs);
+
+        double torso_height = 0.0;
+        if ((ls_ok || rs_ok) && (lh_ok || rh_ok)) {
+          cv::Point3d delta = shoulder_mid - hip_mid;
+          torso_height = std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+        }
+
+        double torso_width = 0.0;
+        if (ls_ok && rs_ok) {
+          cv::Point3d delta = ls - rs;
+          torso_width = std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+        }
+        if (lh_ok && rh_ok) {
+          cv::Point3d delta = lh - rh;
+          double hip_width = std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+          torso_width = torso_width > 1.0 ? 0.5 * (torso_width + hip_width) : hip_width;
+        }
+
+        if (torso_height < 1.0) {
+          torso_height = 400.0;
+        }
+        if (torso_width < 1.0) {
+          torso_width = 300.0;
+        }
+        double torso_depth = std::max(120.0, torso_width * 0.4);
+
+        cv::Point3d y_dir(tracked_body_frame.R_body_cam.at<double>(0, 1),
+                          tracked_body_frame.R_body_cam.at<double>(1, 1),
+                          tracked_body_frame.R_body_cam.at<double>(2, 1));
+        cv::Point3d center_cam = pelvis_cam + y_dir * (torso_height * 0.5);
+
+        DrawBodyFrameBox(display,
+                         tracked_body_frame.R_body_cam,
+                         center_cam,
+                         torso_width * 0.5,
+                         torso_height * 0.5,
+                         torso_depth * 0.5,
+                         cv_in_left);
+      }
+
       // Set mouse callback on YOLO Pose window for depth interaction
       cv::setMouseCallback("YOLO Pose - INDEMIND Left Camera", OnDepthMouseCallback, &depth_region);
 
@@ -549,6 +934,109 @@ int main(int argc, char **argv) {
                     cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(200, 200, 200), 1);
       }
 
+      // Body frame metrics window
+      cv::Mat metrics_panel(950, 650, CV_8UC3, cv::Scalar(245, 245, 245));
+      int metrics_y = 30;
+      const int metrics_line = 22;
+      cv::putText(metrics_panel, "Body Frame Metrics",
+                  cv::Point(10, metrics_y), cv::FONT_HERSHEY_SIMPLEX, 0.7,
+                  cv::Scalar(20, 20, 20), 2);
+      metrics_y += metrics_line + 5;
+
+      std::ostringstream status_ss;
+      status_ss << "Trampoline frame: " << (bed_ready ? "READY" : "NOT READY");
+      cv::putText(metrics_panel, status_ss.str(), cv::Point(10, metrics_y),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(60, 60, 60), 1);
+      metrics_y += metrics_line;
+
+      std::ostringstream track_ss;
+      if (tracked_pose_index >= 0) {
+        track_ss << "Tracked person: " << (tracked_pose_index + 1);
+      } else {
+        track_ss << "Tracked person: NONE";
+      }
+      cv::putText(metrics_panel, track_ss.str(), cv::Point(10, metrics_y),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(60, 60, 60), 1);
+      metrics_y += metrics_line;
+
+      if (tracked_body_frame.valid) {
+        cv::Vec3d angles_deg = tracked_body_frame.euler_rad * (180.0 / M_PI);
+        cv::Vec3d cumulative_deg = rotation_tracker.cumulative * (180.0 / M_PI);
+        cv::Vec3d counts = rotation_tracker.cumulative * (1.0 / (2.0 * M_PI));
+
+        std::ostringstream quat_ss;
+        quat_ss << "Quat (w,x,y,z): [" << std::fixed << std::setprecision(3)
+                << tracked_body_frame.quat[0] << ", "
+                << tracked_body_frame.quat[1] << ", "
+                << tracked_body_frame.quat[2] << ", "
+                << tracked_body_frame.quat[3] << "]";
+        cv::putText(metrics_panel, quat_ss.str(), cv::Point(10, metrics_y),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 0, 0), 1);
+        metrics_y += metrics_line;
+
+        std::ostringstream angle_ss;
+        angle_ss << "Angles deg (x,y,z): [" << std::fixed << std::setprecision(1)
+                 << angles_deg[0] << ", " << angles_deg[1] << ", " << angles_deg[2] << "]";
+        cv::putText(metrics_panel, angle_ss.str(), cv::Point(10, metrics_y),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 0, 0), 1);
+        metrics_y += metrics_line;
+
+        std::ostringstream cum_ss;
+        cum_ss << "Cumulative deg (x,y,z): [" << std::fixed << std::setprecision(1)
+               << cumulative_deg[0] << ", " << cumulative_deg[1] << ", " << cumulative_deg[2] << "]";
+        cv::putText(metrics_panel, cum_ss.str(), cv::Point(10, metrics_y),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 0, 0), 1);
+        metrics_y += metrics_line;
+
+        std::ostringstream count_ss;
+        count_ss << "Counts (flip/twist/side): ["
+                 << std::fixed << std::setprecision(2)
+                 << counts[0] << ", " << counts[1] << ", " << counts[2] << "]";
+        cv::putText(metrics_panel, count_ss.str(), cv::Point(10, metrics_y),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 0, 0), 1);
+        metrics_y += metrics_line;
+      } else {
+        cv::putText(metrics_panel, "Body frame: INVALID",
+                    cv::Point(10, metrics_y), cv::FONT_HERSHEY_SIMPLEX, 0.6,
+                    cv::Scalar(80, 0, 0), 2);
+        metrics_y += metrics_line;
+      }
+
+      metrics_y += 5;
+      cv::putText(metrics_panel, "3D Skeleton (trampoline coords, mm):",
+                  cv::Point(10, metrics_y), cv::FONT_HERSHEY_SIMPLEX, 0.55,
+                  cv::Scalar(30, 30, 30), 1);
+      metrics_y += metrics_line;
+
+      if (bed_ready && tracked_pose_index >= 0 &&
+          tracked_pose_index < static_cast<int>(pose_3d_infos.size())) {
+        const auto &info = pose_3d_infos[tracked_pose_index];
+        for (size_t k = 0; k < poses[tracked_pose_index].keypoints.size(); ++k) {
+          if (metrics_y > metrics_panel.rows - 20) {
+            break;
+          }
+          std::ostringstream kp_ss;
+          kp_ss << GetKeypointName(static_cast<int>(k)) << ": ";
+          if (k < info.kp_valid.size() && info.kp_valid[k]) {
+            const auto &pt = info.kp_bed[k];
+            kp_ss << std::fixed << std::setprecision(1)
+                  << pt.x << ", " << pt.y << ", " << pt.z;
+          } else {
+            kp_ss << "N/A";
+          }
+          cv::putText(metrics_panel, kp_ss.str(), cv::Point(10, metrics_y),
+                      cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(50, 50, 50), 1);
+          metrics_y += metrics_line;
+        }
+      } else {
+        cv::putText(metrics_panel, "No valid 3D skeleton available.",
+                    cv::Point(10, metrics_y), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                    cv::Scalar(50, 50, 50), 1);
+        metrics_y += metrics_line;
+      }
+
+      cv::imshow("Body Frame Metrics", metrics_panel);
+
       cv::imshow("YOLO Pose - INDEMIND Left Camera", display);
     }
 
@@ -581,9 +1069,6 @@ int main(int argc, char **argv) {
     char key = static_cast<char>(cv::waitKey(1));
     if (key == 27 || key == 'q' || key == 'Q') {
       break;
-    } else if (key == 'b' || key == 'B') {
-      show_bbox = !show_bbox;
-      std::cout << "Bounding box: " << (show_bbox ? "ON" : "OFF") << std::endl;
     } else if (key == 'k' || key == 'K') {
       show_keypoints = !show_keypoints;
       std::cout << "Keypoints: " << (show_keypoints ? "ON" : "OFF") << std::endl;
@@ -742,7 +1227,7 @@ FEATURES:
   ✓ Real-time human pose detection (17 COCO keypoints)
   ✓ Multi-person detection
   ✓ Colored skeleton visualization
-  ✓ Bounding box with confidence score
+  ✓ Torso-aligned body frame box (3D)
   ✓ Performance monitoring (FPS, inference time)
   ✓ Frame capture capability
   ✓ Uses INDEMIND left camera
@@ -751,7 +1236,6 @@ FEATURES:
 
 KEYBOARD CONTROLS:
   - 'q' or ESC : Quit the application
-  - 'b' or 'B' : Toggle bounding box on/off
   - 'k' or 'K' : Toggle keypoints display on/off
   - 's' or 'S' : Toggle skeleton lines on/off
   - 'i' or 'I' : Toggle info overlay on/off
@@ -787,7 +1271,7 @@ OUTPUT INFORMATION:
     - Dropped frame statistics
 
 VISUALIZATION:
-  - Bounding Box: Green rectangle around detected person
+  - Torso Box: 3D body-frame-aligned rectangular box
   - Keypoints: Colored circles (color indicates confidence)
     * Red: High confidence (>0.8)
     * Orange: Medium confidence (0.6-0.8)

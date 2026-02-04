@@ -1,0 +1,23 @@
+PARAMS
+action: create
+backend: codex
+run_id: doc_trampoline_plane_20260204T000000Z_r4nd0m1
+step_id: S1
+round: 0
+thread_id: null
+
+PROMPT
+{"task_kind":"step","task_id":"doc_trampoline_plane","run_id":"doc_trampoline_plane_20260204T000000Z_r4nd0m1","step_id":"S1","step_title":"Write Chinese implementation explanation and update doc","step_description":"Explain in Chinese the implementation approach and concrete code changes for the new 4-point ROI + RANSAC trampoline plane fitting feature, aimed at C++ beginners. Update docs/20260204蹦床平面拟合.md with the learning material, covering workflow, key classes/functions, and algorithm steps. Verify the doc content and ensure it matches the actual code changes in this repo.
+
+Output Contract (MUST follow exactly, missing any section => REWORK):
+1. Step Identification
+2. Summary of Work
+3. Files Changed
+4. Commands Executed
+5. Verification Results
+6. Logs / Artifacts
+7. Risks & Limitations
+8. Reproduction Guide","acceptance_criteria":["docs/20260204蹦床平面拟合.md is created or updated with a clear Chinese explanation suitable for C++ beginners, including implementation steps and code structure references.","The document explicitly describes the 4-point ROI selection, RANSAC plane fitting + inlier refinement, and axis definition (Z normal up, X long edge toward image right, Y=ZxX).","The document notes the specific files touched in the implementation (e.g., app/depth_region.h, get_pose_indemind_left.cpp) and summarizes key changes.","Changes are limited to docs/20260204蹦床平面拟合.md unless an additional doc index update is necessary.","If commands are run, they are reported; if no verification is run, it is explicitly stated."],"context":{"repo_overview":"YOLO_rec C++ project; trampoline plane fit implemented in app/depth_region.h and UI updates in get_pose_indemind_left.cpp.","run_dir":".artifacts/agent_runs/doc_trampoline_plane_20260204T000000Z_r4nd0m1/","related_files":["docs/20260204蹦床平面拟合.md","app/depth_region.h","get_pose_indemind_left.cpp"],"constraints":["Write in Chinese for C++ beginner audience","Align document with actual code and behavior","Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"]},"expected_outputs":["Updated docs/20260204蹦床平面拟合.md"],"allowed_actions":["edit repo files","write/update docs","run read-only inspection commands"]}
+
+REQUEST_JSON
+null

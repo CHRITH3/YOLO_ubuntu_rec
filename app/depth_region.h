@@ -508,6 +508,16 @@ public:
     return coord_system_ready_;
   }
 
+  // Retrieve coordinate system (bed frame) basis in camera coordinates and origin.
+  bool GetCoordinateSystem(cv::Mat &rotation_cam, cv::Point3d &origin_cam) const {
+    if (!coord_system_ready_) {
+      return false;
+    }
+    rotation_cam = rotation_matrix_.clone();
+    origin_cam = origin_;
+    return true;
+  }
+
   // Structure to store hip information for one person
   struct HipInfo {
     int person_id;
