@@ -17,6 +17,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <random>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -25,21 +26,26 @@
 class DepthRegion {
 public:
   explicit DepthRegion(std::uint32_t n)
-      : n_(std::move(n)), show_(false), selected_(false), point_(0, 0),
-        click_count_(0), P1_cam_(0, 0, 0), P2_cam_(0, 0, 0), P3_cam_(0, 0, 0),
-        origin_(0, 0, 0), coord_system_ready_(false) {
+      : n_(std::move(n)),
+        show_(false),
+        selected_(false),
+        point_(0, 0),
+        click_count_(0),
+        pending_roi_finalize_(false),
+        plane_fit_ready_(false),
+        plane_inlier_count_(0),
+        plane_inlier_ratio_(0.0),
+        origin_(0, 0, 0),
+        coord_system_ready_(false) {
     rotation_matrix_ = cv::Mat::eye(3, 3, CV_64F);
   }
 
   ~DepthRegion() = default;
 
   /**
-   * Mouse event handler: Records three clicks to establish coordinate system.
-   * Click 1: Origin (P1)
-   * Click 2: Defines X-axis direction (P1 -> P2)
-   * Click 3: Defines Y-axis direction (P1 -> P3)
-   * Z-axis is auto-generated using right-hand rule (Z = X x Y)
-   * After 3 clicks, coordinate system is locked.
+   * Mouse event handler: Records four clicks to define trampoline ROI.
+   * Click 1-4: ROI polygon corners (clockwise or counterclockwise).
+   * After 4 clicks, a plane is fit using ROI depth points (RANSAC + refinement).
    */
   void OnMouse(const int &event, const int &x, const int &y, const int &flags) {
     (void)flags;
@@ -56,16 +62,20 @@ public:
         point_.y = y;
       }
     } else if (event == cv::EVENT_LBUTTONDOWN) {
-      std::cout << "[Click " << (click_count_ + 1) << "] at pixel (" << x << ", " << y << ")" << std::endl;
+      if (roi_points_.size() >= 4) {
+        ResetRoiSelection();
+      }
 
-      // Record click position
+      std::cout << "[ROI Click " << (roi_points_.size() + 1) << "] at pixel (" << x << ", " << y << ")" << std::endl;
+
       point_.x = x;
       point_.y = y;
-      click_count_++;
+      roi_points_.push_back(point_);
+      click_count_ = static_cast<int>(roi_points_.size());
+      selected_ = true;
 
-      // Mark that we need to process this click (calculate 3D coordinate)
-      if (click_count_ <= 3) {
-        selected_ = true;  // Use selected_ flag to indicate pending 3D calculation
+      if (roi_points_.size() == 4) {
+        pending_roi_finalize_ = true;
       }
     }
   }
@@ -93,47 +103,34 @@ public:
     int y_offset = 25;
     int line_height = 28;
 
+    // Finalize ROI -> plane fit when depth data is available.
+    if (pending_roi_finalize_) {
+      TryFinalizePlaneFromROI(depth);
+    }
+
     // Calculate (X, Y, Z) in left camera coordinate system for current mouse position
+    bool cursor_valid = true;
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
     cv::Mat mouse_left_cor(3, 1, CV_64FC1), mouse_img_cor(3, 1, CV_64FC1);
     mouse_img_cor.at<double>(0, 0) = static_cast<double>(point_.x);
     mouse_img_cor.at<double>(1, 0) = static_cast<double>(point_.y);
     mouse_img_cor.at<double>(2, 0) = 1.0;
-    // double Z = depth.at<T>(point_.y, point_.x);
-        // Use robust depth for cursor readout to reduce jitter/noise
-        uint16_t z_mm = 0;
-        if (!RobustDepthMedianU16(depth, point_.x, point_.y, /*r=*/3, z_mm)) {
-            // If invalid, skip drawing numeric 3D info for this cursor location
-            return;
-          }
-        double Z = static_cast<double>(z_mm);
 
-    mouse_left_cor = cv_in_left_inv * Z * mouse_img_cor;
+    uint16_t z_mm = 0;
+    if (!RobustDepthMedianU16(depth, point_.x, point_.y, /*r=*/3, z_mm)) {
+      cursor_valid = false;
+    } else {
+      double Z = static_cast<double>(z_mm);
+      mouse_left_cor = cv_in_left_inv * Z * mouse_img_cor;
+      x = mouse_left_cor.at<double>(0, 0);
+      y = mouse_left_cor.at<double>(1, 0);
+      z = mouse_left_cor.at<double>(2, 0);
+    }
 
-    double x = mouse_left_cor.at<double>(0, 0);
-    double y = mouse_left_cor.at<double>(1, 0);
-    double z = mouse_left_cor.at<double>(2, 0);
-
-    // If we have a pending click (selected_ flag), process it
-    if (selected_ && click_count_ >= 1 && click_count_ <= 3) {
-      cv::Point3d clicked_point(x, y, z);
-
-      if (click_count_ == 1) {
-        P1_cam_ = clicked_point;
-        std::cout << "  P1 (Origin) camera coords: [" << std::fixed << std::setprecision(1)
-                  << P1_cam_.x << ", " << P1_cam_.y << ", " << P1_cam_.z << "] mm" << std::endl;
-      } else if (click_count_ == 2) {
-        P2_cam_ = clicked_point;
-        std::cout << "  P2 (X-axis) camera coords: [" << std::fixed << std::setprecision(1)
-                  << P2_cam_.x << ", " << P2_cam_.y << ", " << P2_cam_.z << "] mm" << std::endl;
-      } else if (click_count_ == 3) {
-        P3_cam_ = clicked_point;
-        std::cout << "  P3 (Y-axis) camera coords: [" << std::fixed << std::setprecision(1)
-                  << P3_cam_.x << ", " << P3_cam_.y << ", " << P3_cam_.z << "] mm" << std::endl;
-        // Build coordinate system after getting all 3 points
-        BuildCoordinateSystem();
-      }
-
-      selected_ = false;  // Clear pending flag
+    if (selected_) {
+      selected_ = false;
     }
 
     // Display current cursor position
@@ -144,57 +141,50 @@ public:
     y_offset += line_height;
 
     std::ostringstream camera_pos_str;
-    camera_pos_str << "Current camera pos: [" << std::fixed << std::setprecision(1)
-                   << x << ", " << y << ", " << z << "] mm";
+    if (cursor_valid) {
+      camera_pos_str << "Current camera pos: [" << std::fixed << std::setprecision(1)
+                     << x << ", " << y << ", " << z << "] mm";
+    } else {
+      camera_pos_str << "Current camera pos: [invalid depth]";
+    }
     cv::putText(im, camera_pos_str.str(), cv::Point(10, y_offset),
                 cv::FONT_HERSHEY_PLAIN, 1.3, cv::Scalar(100, 100, 100), 1);
     y_offset += line_height + 10;
 
-    // Display recorded points
-    if (click_count_ >= 1) {
-      cv::putText(im, "=== Recorded Points ===", cv::Point(10, y_offset),
+    // Display recorded ROI points
+    if (!roi_points_.empty()) {
+      cv::putText(im, "=== ROI Points ===", cv::Point(10, y_offset),
                   cv::FONT_HERSHEY_PLAIN, 1.5, cv::Scalar(0, 128, 255), 2);
       y_offset += line_height;
 
-      // Add instruction text
-      cv::putText(im, "(Click 3 times: P1=Origin, P2=X-axis, P3=Y-axis)", cv::Point(10, y_offset),
+      cv::putText(im, "(Click 4 corners to define trampoline bed)", cv::Point(10, y_offset),
                   cv::FONT_HERSHEY_PLAIN, 1.0, cv::Scalar(100, 100, 100), 1);
       y_offset += line_height;
 
-      std::ostringstream p1_str;
-      p1_str << "P1 (Origin): [" << std::fixed << std::setprecision(1)
-             << P1_cam_.x << ", " << P1_cam_.y << ", " << P1_cam_.z << "] mm";
-      cv::putText(im, p1_str.str(), cv::Point(10, y_offset),
-                  cv::FONT_HERSHEY_PLAIN, 1.3, cv::Scalar(0, 0, 255), 1);
-      y_offset += line_height;
-    }
-
-    if (click_count_ >= 2) {
-      std::ostringstream p2_str;
-      p2_str << "P2 (X-axis): [" << std::fixed << std::setprecision(1)
-             << P2_cam_.x << ", " << P2_cam_.y << ", " << P2_cam_.z << "] mm";
-      cv::putText(im, p2_str.str(), cv::Point(10, y_offset),
-                  cv::FONT_HERSHEY_PLAIN, 1.3, cv::Scalar(0, 128, 0), 1);
-      y_offset += line_height;
-    }
-
-    if (click_count_ >= 3) {
-      std::ostringstream p3_str;
-      p3_str << "P3 (Y-axis): [" << std::fixed << std::setprecision(1)
-             << P3_cam_.x << ", " << P3_cam_.y << ", " << P3_cam_.z << "] mm";
-      cv::putText(im, p3_str.str(), cv::Point(10, y_offset),
-                  cv::FONT_HERSHEY_PLAIN, 1.3, cv::Scalar(255, 0, 0), 1);
-      y_offset += line_height + 10;
+      for (size_t i = 0; i < roi_points_.size(); ++i) {
+        std::ostringstream p_str;
+        p_str << "P" << (i + 1) << ": [" << roi_points_[i].x << ", " << roi_points_[i].y << "]";
+        cv::putText(im, p_str.str(), cv::Point(10, y_offset),
+                    cv::FONT_HERSHEY_PLAIN, 1.3, cv::Scalar(0, 0, 180), 1);
+        y_offset += line_height;
+      }
+      y_offset += 5;
     }
 
     // Display coordinate system status
     if (coord_system_ready_) {
-      cv::putText(im, "Coordinate System: READY", cv::Point(10, y_offset),
+      cv::putText(im, "Trampoline Frame: READY", cv::Point(10, y_offset),
                   cv::FONT_HERSHEY_PLAIN, 1.5, cv::Scalar(0, 200, 0), 2);
+      y_offset += line_height;
+      std::ostringstream plane_str;
+      plane_str << "Plane inliers: " << plane_inlier_count_
+                << " (" << std::fixed << std::setprecision(1) << (plane_inlier_ratio_ * 100.0) << "%)";
+      cv::putText(im, plane_str.str(), cv::Point(10, y_offset),
+                  cv::FONT_HERSHEY_PLAIN, 1.1, cv::Scalar(60, 60, 60), 1);
       y_offset += line_height;
     } else {
       std::ostringstream status_str;
-      status_str << "Clicks: " << click_count_ << " / 3";
+      status_str << "Clicks: " << click_count_ << " / 4";
       cv::putText(im, status_str.str(), cv::Point(10, y_offset),
                   cv::FONT_HERSHEY_PLAIN, 1.3, cv::Scalar(200, 0, 0), 1);
       y_offset += line_height;
@@ -291,86 +281,94 @@ public:
     cv::imshow("region", im);
   }
 
-  /**
-   * Build coordinate system from three points.
-   * X-axis: P1 -> P2
-   * Y-axis: P1 -> P3
-   * Z-axis: X x Y (right-hand rule)
-   */
-  void BuildCoordinateSystem() {
-    // Calculate X-axis direction: P2 - P1
-    cv::Point3d X_vec(P2_cam_.x - P1_cam_.x,
-                      P2_cam_.y - P1_cam_.y,
-                      P2_cam_.z - P1_cam_.z);
-    double X_norm = std::sqrt(X_vec.x * X_vec.x + X_vec.y * X_vec.y + X_vec.z * X_vec.z);
+  bool TryFinalizePlaneFromROI(const cv::Mat &depth) {
+    if (!pending_roi_finalize_) {
+      return false;
+    }
+    pending_roi_finalize_ = false;
 
-    if (X_norm < 1e-6) {
-      std::cout << "[ERROR] P1 and P2 are too close! Cannot establish X-axis." << std::endl;
-      return;
+    if (roi_points_.size() != 4) {
+      return false;
+    }
+    if (depth.empty() || depth.type() != CV_16UC1) {
+      std::cout << "[WARN] Depth map unavailable for plane fit." << std::endl;
+      return false;
     }
 
-    // Normalize X-axis
-    X_vec.x /= X_norm;
-    X_vec.y /= X_norm;
-    X_vec.z /= X_norm;
+    std::vector<cv::Point> ordered_roi;
+    cv::convexHull(roi_points_, ordered_roi, true);
+    if (ordered_roi.size() != 4) {
+      std::cout << "[WARN] ROI points are degenerate; please reselect." << std::endl;
+      return false;
+    }
+    roi_points_ = ordered_roi;
 
-    // Calculate Y-axis direction: P3 - P1
-    cv::Point3d Y_vec(P3_cam_.x - P1_cam_.x,
-                      P3_cam_.y - P1_cam_.y,
-                      P3_cam_.z - P1_cam_.z);
-    double Y_norm = std::sqrt(Y_vec.x * Y_vec.x + Y_vec.y * Y_vec.y + Y_vec.z * Y_vec.z);
+    cv::Mat mask(depth.rows, depth.cols, CV_8UC1, cv::Scalar(0));
+    std::vector<std::vector<cv::Point>> poly(1, roi_points_);
+    cv::fillPoly(mask, poly, cv::Scalar(255));
 
-    if (Y_norm < 1e-6) {
-      std::cout << "[ERROR] P1 and P3 are too close! Cannot establish Y-axis." << std::endl;
-      return;
+    std::vector<cv::Point3d> samples;
+    samples.reserve(2000);
+
+    const int step = roi_sample_step_;
+    for (int y = 0; y < depth.rows; y += step) {
+      const uint16_t *row = depth.ptr<uint16_t>(y);
+      const uint8_t *mrow = mask.ptr<uint8_t>(y);
+      for (int x = 0; x < depth.cols; x += step) {
+        if (mrow[x] == 0) continue;
+        uint16_t z_mm = row[x];
+        if (z_mm == 0 || z_mm >= 10000) continue;
+        cv::Mat pt_img = (cv::Mat_<double>(3, 1) << static_cast<double>(x),
+                          static_cast<double>(y), 1.0);
+        cv::Mat pt_cam = cv_in_left_inv * static_cast<double>(z_mm) * pt_img;
+        samples.emplace_back(pt_cam.at<double>(0, 0),
+                             pt_cam.at<double>(1, 0),
+                             pt_cam.at<double>(2, 0));
+      }
     }
 
-    // Normalize Y-axis
-    Y_vec.x /= Y_norm;
-    Y_vec.y /= Y_norm;
-    Y_vec.z /= Y_norm;
-
-    // Calculate Z-axis: Z = X x Y (right-hand rule)
-    cv::Point3d Z_vec(X_vec.y * Y_vec.z - X_vec.z * Y_vec.y,
-                      X_vec.z * Y_vec.x - X_vec.x * Y_vec.z,
-                      X_vec.x * Y_vec.y - X_vec.y * Y_vec.x);
-    double Z_norm = std::sqrt(Z_vec.x * Z_vec.x + Z_vec.y * Z_vec.y + Z_vec.z * Z_vec.z);
-
-    if (Z_norm < 1e-6) {
-      std::cout << "[ERROR] X and Y axes are parallel! Cannot establish Z-axis." << std::endl;
-      return;
+    if (samples.size() < 50) {
+      std::cout << "[WARN] Not enough depth samples in ROI (" << samples.size() << ")." << std::endl;
+      return false;
     }
 
-    // Normalize Z-axis
-    Z_vec.x /= Z_norm;
-    Z_vec.y /= Z_norm;
-    Z_vec.z /= Z_norm;
+    std::vector<int> inlier_idx;
+    cv::Vec4d plane_ransac;
+    bool ok = FitPlaneRansac(samples, ransac_max_iters_, ransac_inlier_thresh_mm_, inlier_idx, plane_ransac);
+    if (!ok) {
+      std::cout << "[WARN] RANSAC plane fit failed." << std::endl;
+      return false;
+    }
 
-    // Build rotation matrix: R = [X_vec | Y_vec | Z_vec]
-    // Each column is an axis vector
-    rotation_matrix_.at<double>(0, 0) = X_vec.x;
-    rotation_matrix_.at<double>(1, 0) = X_vec.y;
-    rotation_matrix_.at<double>(2, 0) = X_vec.z;
+    std::vector<cv::Point3d> inliers;
+    inliers.reserve(inlier_idx.size());
+    for (int idx : inlier_idx) {
+      inliers.push_back(samples[idx]);
+    }
 
-    rotation_matrix_.at<double>(0, 1) = Y_vec.x;
-    rotation_matrix_.at<double>(1, 1) = Y_vec.y;
-    rotation_matrix_.at<double>(2, 1) = Y_vec.z;
+    cv::Vec4d plane_refined;
+    if (!FitPlaneLeastSquares(inliers, plane_refined)) {
+      std::cout << "[WARN] Refined plane fit failed." << std::endl;
+      return false;
+    }
 
-    rotation_matrix_.at<double>(0, 2) = Z_vec.x;
-    rotation_matrix_.at<double>(1, 2) = Z_vec.y;
-    rotation_matrix_.at<double>(2, 2) = Z_vec.z;
+    plane_coeffs_ = plane_refined;
+    plane_inlier_count_ = static_cast<int>(inliers.size());
+    plane_inlier_ratio_ = static_cast<double>(inliers.size()) / static_cast<double>(samples.size());
+    plane_fit_ready_ = true;
 
-    // Set origin
-    origin_ = P1_cam_;
+    if (!BuildFrameFromPlane(plane_refined, inliers)) {
+      std::cout << "[WARN] Failed to build trampoline frame from plane." << std::endl;
+      return false;
+    }
 
-    coord_system_ready_ = true;
+    std::cout << "\n[Trampoline Plane Established]" << std::endl;
+    std::cout << "Plane: n=[" << plane_refined[0] << ", " << plane_refined[1] << ", " << plane_refined[2]
+              << "], d=" << plane_refined[3] << std::endl;
+    std::cout << "Inliers: " << plane_inlier_count_ << " / " << samples.size()
+              << " (" << std::fixed << std::setprecision(1) << (plane_inlier_ratio_ * 100.0) << "%)" << std::endl;
 
-    std::cout << "\n[Coordinate System Established]" << std::endl;
-    std::cout << "Origin (P1): [" << std::fixed << std::setprecision(1)
-              << origin_.x << ", " << origin_.y << ", " << origin_.z << "] mm" << std::endl;
-    std::cout << "X-axis (P1->P2): [" << X_vec.x << ", " << X_vec.y << ", " << X_vec.z << "]" << std::endl;
-    std::cout << "Y-axis (P1->P3): [" << Y_vec.x << ", " << Y_vec.y << ", " << Y_vec.z << "]" << std::endl;
-    std::cout << "Z-axis (XxY): [" << Z_vec.x << ", " << Z_vec.y << ", " << Z_vec.z << "]" << std::endl;
+    return true;
   }
 
   /**
@@ -407,11 +405,24 @@ public:
   void DrawRect(cv::Mat &image) { // NOLINT
     if (!show_)
       return;
-    std::uint32_t n = (n_ > 1) ? n_ : 1;
-    n += 1; // outside the region
-    cv::rectangle(image, cv::Point(point_.x - n, point_.y - n),
-                  cv::Point(point_.x + n, point_.y + n),
-                  selected_ ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255), 1);
+    cv::Scalar color = coord_system_ready_ ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255);
+    if (roi_points_.empty()) {
+      std::uint32_t n = (n_ > 1) ? n_ : 1;
+      n += 1; // outside the region
+      cv::rectangle(image, cv::Point(point_.x - n, point_.y - n),
+                    cv::Point(point_.x + n, point_.y + n),
+                    selected_ ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255), 1);
+      return;
+    }
+
+    for (const auto& p : roi_points_) {
+      cv::circle(image, p, 4, color, -1);
+      cv::circle(image, p, 6, cv::Scalar(0, 0, 0), 1);
+    }
+
+    if (roi_points_.size() >= 2) {
+      cv::polylines(image, roi_points_, roi_points_.size() == 4, color, 2, cv::LINE_AA);
+    }
   }
 
   // Draw coordinate system axes on RGB image
@@ -1008,16 +1019,230 @@ public:
   }
 
 private:
+  void ResetRoiSelection() {
+    roi_points_.clear();
+    click_count_ = 0;
+    pending_roi_finalize_ = false;
+    plane_fit_ready_ = false;
+    plane_inlier_count_ = 0;
+    plane_inlier_ratio_ = 0.0;
+    coord_system_ready_ = false;
+    plane_coeffs_ = cv::Vec4d(0, 0, 0, 0);
+  }
+
+  static bool FitPlaneLeastSquares(const std::vector<cv::Point3d>& pts, cv::Vec4d& plane) {
+    if (pts.size() < 3) return false;
+    cv::Point3d mean(0, 0, 0);
+    for (const auto& p : pts) {
+      mean.x += p.x;
+      mean.y += p.y;
+      mean.z += p.z;
+    }
+    mean.x /= static_cast<double>(pts.size());
+    mean.y /= static_cast<double>(pts.size());
+    mean.z /= static_cast<double>(pts.size());
+
+    double xx = 0.0, xy = 0.0, xz = 0.0, yy = 0.0, yz = 0.0, zz = 0.0;
+    for (const auto& p : pts) {
+      double dx = p.x - mean.x;
+      double dy = p.y - mean.y;
+      double dz = p.z - mean.z;
+      xx += dx * dx;
+      xy += dx * dy;
+      xz += dx * dz;
+      yy += dy * dy;
+      yz += dy * dz;
+      zz += dz * dz;
+    }
+
+    cv::Mat cov = (cv::Mat_<double>(3, 3) << xx, xy, xz,
+                                             xy, yy, yz,
+                                             xz, yz, zz);
+    cv::Mat eigen_vals, eigen_vecs;
+    cv::eigen(cov, eigen_vals, eigen_vecs);
+    cv::Vec3d n(eigen_vecs.at<double>(2, 0),
+                eigen_vecs.at<double>(2, 1),
+                eigen_vecs.at<double>(2, 2));
+    double norm = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+    if (norm < 1e-9) return false;
+    n /= norm;
+    double d = -(n[0] * mean.x + n[1] * mean.y + n[2] * mean.z);
+    plane = cv::Vec4d(n[0], n[1], n[2], d);
+    return true;
+  }
+
+  static bool FitPlaneRansac(const std::vector<cv::Point3d>& pts,
+                             int max_iters,
+                             double inlier_thresh,
+                             std::vector<int>& best_inliers,
+                             cv::Vec4d& best_plane) {
+    best_inliers.clear();
+    if (pts.size() < 3) return false;
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, static_cast<int>(pts.size()) - 1);
+
+    for (int iter = 0; iter < max_iters; ++iter) {
+      int i1 = dis(gen);
+      int i2 = dis(gen);
+      int i3 = dis(gen);
+      if (i1 == i2 || i1 == i3 || i2 == i3) {
+        --iter;
+        continue;
+      }
+
+      const auto& p1 = pts[i1];
+      const auto& p2 = pts[i2];
+      const auto& p3 = pts[i3];
+
+      cv::Vec3d v1(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z);
+      cv::Vec3d v2(p3.x - p1.x, p3.y - p1.y, p3.z - p1.z);
+      cv::Vec3d n = v1.cross(v2);
+      double norm = std::sqrt(n.dot(n));
+      if (norm < 1e-9) continue;
+      n /= norm;
+      double d = -(n[0] * p1.x + n[1] * p1.y + n[2] * p1.z);
+
+      std::vector<int> inliers;
+      inliers.reserve(pts.size());
+      for (int i = 0; i < static_cast<int>(pts.size()); ++i) {
+        const auto& p = pts[i];
+        double dist = std::abs(n[0] * p.x + n[1] * p.y + n[2] * p.z + d);
+        if (dist < inlier_thresh) {
+          inliers.push_back(i);
+        }
+      }
+
+      if (inliers.size() > best_inliers.size()) {
+        best_inliers.swap(inliers);
+        best_plane = cv::Vec4d(n[0], n[1], n[2], d);
+        if (best_inliers.size() > pts.size() * 0.85) {
+          break;
+        }
+      }
+    }
+
+    return best_inliers.size() >= 10;
+  }
+
+  bool PixelToPlanePoint(const cv::Point& px, const cv::Vec4d& plane, cv::Point3d& out) const {
+    cv::Mat ray = cv_in_left_inv * (cv::Mat_<double>(3, 1) << static_cast<double>(px.x),
+                                   static_cast<double>(px.y), 1.0);
+    cv::Vec3d dir(ray.at<double>(0, 0), ray.at<double>(1, 0), ray.at<double>(2, 0));
+    cv::Vec3d n(plane[0], plane[1], plane[2]);
+    double denom = n.dot(dir);
+    if (std::abs(denom) < 1e-9) return false;
+    double t = -plane[3] / denom;
+    if (t <= 0.0) return false;
+    out = cv::Point3d(dir[0] * t, dir[1] * t, dir[2] * t);
+    return true;
+  }
+
+  bool BuildFrameFromPlane(const cv::Vec4d& plane, const std::vector<cv::Point3d>& inliers) {
+    if (roi_points_.size() < 4 || inliers.size() < 3) return false;
+    cv::Vec3d Z_vec(plane[0], plane[1], plane[2]);
+    double zn = std::sqrt(Z_vec.dot(Z_vec));
+    if (zn < 1e-9) return false;
+    Z_vec /= zn;
+
+    // Assume camera Y+ is down; ensure "up" is negative Y.
+    if (Z_vec[1] > 0.0) {
+      Z_vec = -Z_vec;
+    }
+
+    int best_idx = 0;
+    double best_len = -1.0;
+    for (int i = 0; i < 4; ++i) {
+      int j = (i + 1) % 4;
+      double dx = static_cast<double>(roi_points_[j].x - roi_points_[i].x);
+      double dy = static_cast<double>(roi_points_[j].y - roi_points_[i].y);
+      double len = std::sqrt(dx * dx + dy * dy);
+      if (len > best_len) {
+        best_len = len;
+        best_idx = i;
+      }
+    }
+    int idx1 = best_idx;
+    int idx2 = (best_idx + 1) % 4;
+    if (roi_points_[idx2].x < roi_points_[idx1].x) {
+      std::swap(idx1, idx2);
+    }
+
+    cv::Point3d p1, p2;
+    if (!PixelToPlanePoint(roi_points_[idx1], plane, p1) ||
+        !PixelToPlanePoint(roi_points_[idx2], plane, p2)) {
+      return false;
+    }
+
+    cv::Vec3d X_vec(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z);
+    double xn = std::sqrt(X_vec.dot(X_vec));
+    if (xn < 1e-9) return false;
+    X_vec /= xn;
+
+    // Ensure X lies in plane and orthogonal to Z
+    X_vec = X_vec - Z_vec * (X_vec.dot(Z_vec));
+    xn = std::sqrt(X_vec.dot(X_vec));
+    if (xn < 1e-9) return false;
+    X_vec /= xn;
+
+    cv::Vec3d Y_vec = cv::Vec3d(Z_vec).cross(X_vec);
+    double yn = std::sqrt(Y_vec.dot(Y_vec));
+    if (yn < 1e-9) return false;
+    Y_vec /= yn;
+
+    // Re-orthonormalize X to keep right-handed frame
+    X_vec = Y_vec.cross(Z_vec);
+    xn = std::sqrt(X_vec.dot(X_vec));
+    if (xn < 1e-9) return false;
+    X_vec /= xn;
+
+    rotation_matrix_.at<double>(0, 0) = X_vec[0];
+    rotation_matrix_.at<double>(1, 0) = X_vec[1];
+    rotation_matrix_.at<double>(2, 0) = X_vec[2];
+
+    rotation_matrix_.at<double>(0, 1) = Y_vec[0];
+    rotation_matrix_.at<double>(1, 1) = Y_vec[1];
+    rotation_matrix_.at<double>(2, 1) = Y_vec[2];
+
+    rotation_matrix_.at<double>(0, 2) = Z_vec[0];
+    rotation_matrix_.at<double>(1, 2) = Z_vec[1];
+    rotation_matrix_.at<double>(2, 2) = Z_vec[2];
+
+    cv::Point3d mean(0, 0, 0);
+    for (const auto& p : inliers) {
+      mean.x += p.x;
+      mean.y += p.y;
+      mean.z += p.z;
+    }
+    mean.x /= static_cast<double>(inliers.size());
+    mean.y /= static_cast<double>(inliers.size());
+    mean.z /= static_cast<double>(inliers.size());
+    origin_ = mean;
+
+    coord_system_ready_ = true;
+    return true;
+  }
+
   std::uint32_t n_;
   bool show_;
   bool selected_;
   cv::Point point_;
 
-  // Coordinate system construction variables
-  int click_count_;                   // Number of clicks recorded (0-3)
-  cv::Point3d P1_cam_, P2_cam_, P3_cam_;  // Three points in camera coordinate system
-  cv::Mat rotation_matrix_;            // 3x3 rotation matrix from camera to new frame
-  cv::Point3d origin_;                 // Origin of new coordinate system (P1)
+  // ROI / plane fit state
+  int click_count_;                   // Number of clicks recorded (0-4)
+  std::vector<cv::Point> roi_points_;
+  bool pending_roi_finalize_;
+  bool plane_fit_ready_;
+  int plane_inlier_count_;
+  double plane_inlier_ratio_;
+  cv::Vec4d plane_coeffs_;
+  int roi_sample_step_ = 4;
+  int ransac_max_iters_ = 200;
+  double ransac_inlier_thresh_mm_ = 15.0;
+
+  cv::Mat rotation_matrix_;            // 3x3 rotation matrix from camera to trampoline frame
+  cv::Point3d origin_;                 // Origin of trampoline frame
   bool coord_system_ready_;            // Whether coordinate system is established
 
   // Hip data for all detected persons

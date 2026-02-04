@@ -196,6 +196,8 @@ int main(int argc, char **argv) {
   std::cout << "  + / -   : Increase/Decrease Z threshold" << std::endl;
   std::cout << "  [ / ]   : Decrease/Increase window radius" << std::endl;
   std::cout << "  p       : Print current parameters" << std::endl;
+  std::cout << "  --- Trampoline ROI ---" << std::endl;
+  std::cout << "  Mouse   : Click 4 corners in YOLO window to fit bed plane" << std::endl;
   std::cout << "  --- Landing Points Recording ---" << std::endl;
   std::cout << "  r       : Toggle REC (ON: record landing points)" << std::endl;
   std::cout << "  c       : Clear landing points cache" << std::endl;
@@ -705,12 +707,12 @@ VERSION: 2.0 (YOLO Pose - INDEMIND Left Camera with 3D Coordinate Inspection)
 
 DESCRIPTION:
   Real-time human pose detection using YOLOv8-pose model with INDEMIND
-  left camera RGB images. Click on the image to inspect 3D coordinates
-  of any region using depth data.
+  left camera RGB images. Click 4 corners on the image to define a
+  trampoline bed ROI and fit a plane using depth data.
 
   Key features:
     ✓ Uses left camera image for pose detection (RGB)
-    ✓ Click to inspect 3D coordinates of any region
+    ✓ 4-click ROI to fit trampoline bed plane (RANSAC)
     ✓ Real-time depth value display
     ✓ Camera coordinate calculation (X, Y, Z)
 
@@ -744,8 +746,8 @@ FEATURES:
   ✓ Performance monitoring (FPS, inference time)
   ✓ Frame capture capability
   ✓ Uses INDEMIND left camera
-  ✓ Mouse click to inspect 3D coordinates
-  ✓ Region depth value grid display
+  ✓ Mouse ROI selection for trampoline bed plane
+  ✓ Region window shows plane-fit status
 
 KEYBOARD CONTROLS:
   - 'q' or ESC : Quit the application
@@ -758,14 +760,13 @@ KEYBOARD CONTROLS:
 MOUSE INTERACTION:
   On "YOLO Pose - INDEMIND Left Camera" window:
   - Move mouse: Preview depth values at cursor location
-  - Left click: Lock the region for 3D coordinate inspection
-  - Click again on selected region: Unlock/deselect
+  - Left click (4 corners): Define trampoline bed ROI and fit plane (RANSAC)
+  - Additional click: Reset ROI and start a new selection
 
   "region" window shows (appears on click):
-  - 7x7 grid of depth values (in mm) around selected point
-  - Center point highlighted in red
   - Image coordinates [row, col]
   - 3D camera coordinates [X, Y, Z] in mm
+  - ROI point list and plane-fit status
 
 WINDOWS DISPLAYED:
   1. "YOLO Pose - INDEMIND Left Camera": Main pose detection display
