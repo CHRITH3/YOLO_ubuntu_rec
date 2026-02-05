@@ -1,0 +1,14 @@
+{
+  "run_id": "yolo_pose_single_leg_classification_20260205T120000Z_q8n4v2b",
+  "created_at": "2026-02-05T04:14:53.824408+00:00",
+  "repo": {
+    "path": "/home/chris4/workspace/from_vm/YOLO_rec",
+    "branch": "main",
+    "commit": "2e3756da0744c2bec42581a6ba34dbbbae6a0136",
+    "commit_short": "2e3756d",
+    "dirty": true
+  },
+  "policy": {
+    "max_rework_rounds_per_step": 6
+  }
+}

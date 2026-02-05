@@ -208,6 +208,16 @@ static bool AngleDeg(const cv::Vec3d &a, const cv::Vec3d &b, double &out_deg) {
   return true;
 }
 
+static std::string ClassifyPosture(double tt_deg, double ts_deg) {
+  if (tt_deg <= 135.0) {
+    if (ts_deg <= 135.0) {
+      return "Tuck";
+    }
+    return "Pike";
+  }
+  return "Straight";
+}
+
 static PostureMetrics ComputePostureMetrics(const PoseResult &pose,
                                             const Pose3DInfo &info) {
   PostureMetrics metrics;
@@ -267,16 +277,16 @@ static PostureMetrics ComputePostureMetrics(const PoseResult &pose,
     metrics.avg_valid = true;
   }
 
-  if (metrics.avg_valid) {
-    if (metrics.avg_tt <= 135.0) {
-      if (metrics.avg_ts <= 135.0) {
-        metrics.label = "Tuck";
-      } else {
-        metrics.label = "Pike";
-      }
-    } else {
-      metrics.label = "Straight";
+  if (metrics.left_valid && metrics.right_valid) {
+    const std::string left_label = ClassifyPosture(metrics.left_tt, metrics.left_ts);
+    const std::string right_label = ClassifyPosture(metrics.right_tt, metrics.right_ts);
+    if (left_label == right_label) {
+      metrics.label = left_label;
     }
+  } else if (metrics.left_valid) {
+    metrics.label = ClassifyPosture(metrics.left_tt, metrics.left_ts);
+  } else if (metrics.right_valid) {
+    metrics.label = ClassifyPosture(metrics.right_tt, metrics.right_ts);
   }
 
   return metrics;

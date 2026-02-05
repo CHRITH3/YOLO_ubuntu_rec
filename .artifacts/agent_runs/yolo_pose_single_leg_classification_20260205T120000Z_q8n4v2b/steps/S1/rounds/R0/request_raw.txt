@@ -1,0 +1,85 @@
+PARAMS
+action: create
+backend: codex
+run_id: yolo_pose_single_leg_classification_20260205T120000Z_q8n4v2b
+step_id: S1
+round: 0
+thread_id: null
+
+PROMPT
+{
+  "task_kind": "step",
+  "task_id": "yolo_pose_single_leg_classification",
+  "run_id": "yolo_pose_single_leg_classification_20260205T120000Z_q8n4v2b",
+  "step_id": "S1",
+  "step_title": "Change posture classification to per-leg rule",
+  "step_description": "Update posture classification to require per-leg evaluation when both legs are valid: only if both legs satisfy the same posture rule (tuck/pike/straight) should that label be assigned; otherwise handle per the specified rules. Keep single-leg and Unknown behavior unchanged. Update UI text if needed and keep docs in sync, then build and capture logs.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "When both legs are valid, posture classification is computed per-leg and only assigns a label if both legs satisfy the same posture rule; otherwise label is Unknown (unless you define a different explicit rule consistent with the request).",
+    "When only one leg is valid, classification uses that leg; when neither is valid, label and angles remain Unknown/N/A.",
+    "Docs are updated to describe the per-leg classification logic and build succeeds with logs captured in the run_dir."
+  ],
+  "context": {
+    "repo_overview": "YOLO pose estimation project with posture metrics in get_pose_indemind_left.cpp and docs for posture classification.",
+    "run_dir": ".artifacts/agent_runs/yolo_pose_single_leg_classification_20260205T120000Z_q8n4v2b/",
+    "related_files": [
+      "get_pose_indemind_left.cpp",
+      "docs/20260204三种基本姿态判断.md",
+      "CMakeLists.txt"
+    ],
+    "constraints": [
+      "Do not change the 135° thresholds.",
+      "Maintain existing UI display lines unless changes are required for correctness.",
+      "Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"
+    ]
+  },
+  "expected_outputs": [
+    "Updated posture classification logic in get_pose_indemind_left.cpp",
+    "Updated docs/20260204三种基本姿态判断.md",
+    "Build logs in run_dir"
+  ],
+  "allowed_actions": [
+    "edit repo files",
+    "run build/test commands",
+    "write/update docs"
+  ]
+}
+
+REQUEST_JSON
+{
+  "task_kind": "step",
+  "task_id": "yolo_pose_single_leg_classification",
+  "run_id": "yolo_pose_single_leg_classification_20260205T120000Z_q8n4v2b",
+  "step_id": "S1",
+  "step_title": "Change posture classification to per-leg rule",
+  "step_description": "Update posture classification to require per-leg evaluation when both legs are valid: only if both legs satisfy the same posture rule (tuck/pike/straight) should that label be assigned; otherwise handle per the specified rules. Keep single-leg and Unknown behavior unchanged. Update UI text if needed and keep docs in sync, then build and capture logs.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "When both legs are valid, posture classification is computed per-leg and only assigns a label if both legs satisfy the same posture rule; otherwise label is Unknown (unless you define a different explicit rule consistent with the request).",
+    "When only one leg is valid, classification uses that leg; when neither is valid, label and angles remain Unknown/N/A.",
+    "Docs are updated to describe the per-leg classification logic and build succeeds with logs captured in the run_dir."
+  ],
+  "context": {
+    "repo_overview": "YOLO pose estimation project with posture metrics in get_pose_indemind_left.cpp and docs for posture classification.",
+    "run_dir": ".artifacts/agent_runs/yolo_pose_single_leg_classification_20260205T120000Z_q8n4v2b/",
+    "related_files": [
+      "get_pose_indemind_left.cpp",
+      "docs/20260204三种基本姿态判断.md",
+      "CMakeLists.txt"
+    ],
+    "constraints": [
+      "Do not change the 135° thresholds.",
+      "Maintain existing UI display lines unless changes are required for correctness.",
+      "Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"
+    ]
+  },
+  "expected_outputs": [
+    "Updated posture classification logic in get_pose_indemind_left.cpp",
+    "Updated docs/20260204三种基本姿态判断.md",
+    "Build logs in run_dir"
+  ],
+  "allowed_actions": [
+    "edit repo files",
+    "run build/test commands",
+    "write/update docs"
+  ]
+}
