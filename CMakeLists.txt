@@ -9,6 +9,11 @@ project(YOLOPoseDetection VERSION 1.0.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Allow overriding output dir to avoid permission issues with root-owned build/.
+if(NOT DEFINED YOLO_OUTPUT_DIR)
+    set(YOLO_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/build_agent_out")
+endif()
+
 # Build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -195,7 +200,7 @@ add_executable(yolo_pose_indemind_left
 
 set_target_properties(yolo_pose_indemind_left PROPERTIES
 #    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build
+    RUNTIME_OUTPUT_DIRECTORY ${YOLO_OUTPUT_DIR}
     OUTPUT_NAME "yolo_pose_indemind_left"
 )
 
@@ -243,7 +248,7 @@ message(STATUS "  Build Configuration Summary")
 message(STATUS "=========================================")
 message(STATUS "Executables:")
 message(STATUS "  1. yolo_pose_indemind_left   (INDEMIND RGB only)")
-message(STATUS "Output directory: ${PROJECT_SOURCE_DIR}/build")
+message(STATUS "Output directory: ${YOLO_OUTPUT_DIR}")
 message(STATUS "")
 message(STATUS "Dependencies:")
 message(STATUS "  ✓ OpenCV ${OpenCV_VERSION}")

@@ -1,0 +1,41 @@
+{
+  "task_kind": "step",
+  "task_id": "yolo_pose_angles_posture",
+  "run_id": "yolo_pose_angles_posture_20260204T120000Z_r7f3a2c",
+  "step_id": "S1",
+  "step_title": "Implement posture angles and classification with UI display and docs",
+  "step_description": "Implement trunk-thigh and thigh-shank angle computations in the existing camera-coordinate 3D skeleton pipeline, and display the real-time angles in Body Frame Metrics Window. Add posture classification (tuck/pike/straight) per the specified thresholds and show the result in both Body Frame Metrics Window and YOLO Pose window. Create a C++ beginner-friendly doc in docs with the specified title describing the approach and code changes, and ensure the project compiles successfully.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "Compute trunk-thigh and thigh-shank angles as specified (including hip/shoulder midpoint definitions) for both left and right legs, and display the two angles in the Body Frame Metrics Window in real time.",
+    "Classify posture as tuck/pike/straight using the specified thresholds and show the classification in both Body Frame Metrics Window and YOLO Pose window in real time.",
+    "Add docs/20260204三种基本姿态判断.md with the required title and clear implementation explanation for C++ beginners, and the project builds successfully with recorded build command output."
+  ],
+  "context": {
+    "repo_overview": "YOLO pose estimation project with UI windows for body frame metrics and pose display. C++ codebase with pose utils and detector files.",
+    "run_dir": ".artifacts/agent_runs/yolo_pose_angles_posture_20260204T120000Z_r7f3a2c/",
+    "related_files": [
+      "yolo_pose_detector.cpp",
+      "yolo_pose_detector.h",
+      "pose_utils.cpp",
+      "pose_utils.h",
+      "docs/",
+      "get_pose_indemind_left.cpp",
+      "CMakeLists.txt"
+    ],
+    "constraints": [
+      "Follow user-specified math and thresholds exactly; use degrees for display.",
+      "Ensure UI updates occur in real time without breaking existing windows.",
+      "Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"
+    ]
+  },
+  "expected_outputs": [
+    "Updated C++ source implementing angle computation and classification",
+    "docs/20260204三种基本姿态判断.md",
+    "Build/compile log or command output in run_dir"
+  ],
+  "allowed_actions": [
+    "edit repo files",
+    "run build/test commands",
+    "write/update docs"
+  ]
+}

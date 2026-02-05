@@ -1,0 +1,40 @@
+-- =========================================
+--   YOLO Pose Detection Standalone Build
+-- =========================================
+-- Build type: Release
+-- Project directory: /home/chris4/workspace/from_vm/YOLO_rec
+-- Platform: Linux
+-- CXX Flags:  -Wall -Wextra
+-- ✓ Found OpenCV: 3.4.3
+--   Include: /usr/local/include;/usr/local/include/opencv
+--   Libraries: opencv_calib3d;opencv_core;opencv_dnn;opencv_features2d;opencv_flann;opencv_highgui;opencv_imgcodecs;opencv_imgproc;opencv_ml;opencv_objdetect;opencv_photo;opencv_shape;opencv_stitching;opencv_superres;opencv_video;opencv_videoio;opencv_videostab
+-- ✓ Detected Conda environment: /home/chris4/miniconda3
+-- ✓ Found ONNX Runtime
+--   Include: /usr/local/include/onnxruntime
+--   Library: /usr/local/lib/libonnxruntime.so
+-- ✓ Found IMSEE SDK
+--   Include: /home/chris4/workspace/from_vm/YOLO_rec/include
+--   Library: /home/chris4/workspace/from_vm/YOLO_rec/lib/libindemind.so
+-- =========================================
+--   Build Configuration Summary
+-- =========================================
+-- Executables:
+--   1. yolo_pose_indemind_left   (INDEMIND RGB only)
+-- Output directory: /home/chris4/workspace/from_vm/YOLO_rec/build_agent_out
+-- 
+-- Dependencies:
+--   ✓ OpenCV 3.4.3
+--   ✓ ONNX Runtime
+--   ✓ IMSEE SDK
+-- 
+-- To build:
+--   mkdir -p build && cd build
+--   cmake ..
+--   make
+-- 
+-- To run:
+--   sudo ./build/yolo_pose_indemind_left      
+-- =========================================
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/chris4/workspace/from_vm/YOLO_rec/build_agent

@@ -1,0 +1,43 @@
+PARAMS
+action: create
+backend: codex
+run_id: yolo_pose_doc_update_20260204T000000Z_m2t7q1n
+step_id: S1
+round: 0
+thread_id: null
+
+PROMPT
+{"task_kind":"step","task_id":"yolo_pose_doc_update","run_id":"yolo_pose_doc_update_20260204T000000Z_m2t7q1n","step_id":"S1","step_title":"Expand 20260204人体坐标系.md with detailed implementation notes","step_description":"Update docs/20260204人体坐标系.md only: add detailed, beginner-friendly explanations for the six specified features (3D keypoint depth pipeline, body frame axes, Gram-Schmidt/R_rel/quaternion, rotation metrics and cumulative counts, axis visualization, metrics window). Do not modify any other files. Keep formatting simple and avoid nested bullets.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide","acceptance_criteria":["docs/20260204人体坐标系.md is updated with detailed explanations for all six requested items.","Only docs/20260204人体坐标系.md is modified; no other files are changed.","Content is suitable for C++ beginners and references concrete code locations/structures without requiring code changes."],"context":{"repo_overview":"YOLO pose project with existing doc at docs/20260204人体坐标系.md.","run_dir":".artifacts/agent_runs/yolo_pose_doc_update_20260204T000000Z_m2t7q1n/","related_files":["docs/20260204人体坐标系.md"],"constraints":["Only modify docs/20260204人体坐标系.md","Avoid nested bullet lists"]},"expected_outputs":["Updated docs/20260204人体坐标系.md"],"allowed_actions":["edit repo files","write/update docs"]}
+
+REQUEST_JSON
+{
+  "task_kind": "step",
+  "task_id": "yolo_pose_doc_update",
+  "run_id": "yolo_pose_doc_update_20260204T000000Z_m2t7q1n",
+  "step_id": "S1",
+  "step_title": "Expand 20260204人体坐标系.md with detailed implementation notes",
+  "step_description": "Update docs/20260204人体坐标系.md only: add detailed, beginner-friendly explanations for the six specified features (3D keypoint depth pipeline, body frame axes, Gram-Schmidt/R_rel/quaternion, rotation metrics and cumulative counts, axis visualization, metrics window). Do not modify any other files. Keep formatting simple and avoid nested bullets.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "docs/20260204人体坐标系.md is updated with detailed explanations for all six requested items.",
+    "Only docs/20260204人体坐标系.md is modified; no other files are changed.",
+    "Content is suitable for C++ beginners and references concrete code locations/structures without requiring code changes."
+  ],
+  "context": {
+    "repo_overview": "YOLO pose project with existing doc at docs/20260204人体坐标系.md.",
+    "run_dir": ".artifacts/agent_runs/yolo_pose_doc_update_20260204T000000Z_m2t7q1n/",
+    "related_files": [
+      "docs/20260204人体坐标系.md"
+    ],
+    "constraints": [
+      "Only modify docs/20260204人体坐标系.md",
+      "Avoid nested bullet lists"
+    ]
+  },
+  "expected_outputs": [
+    "Updated docs/20260204人体坐标系.md"
+  ],
+  "allowed_actions": [
+    "edit repo files",
+    "write/update docs"
+  ]
+}

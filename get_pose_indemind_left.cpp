@@ -165,6 +165,123 @@ static bool ProjectPoint(const cv::Point3d &p_cam, const cv::Mat &K, cv::Point &
   return true;
 }
 
+struct PostureMetrics {
+  bool left_valid = false;
+  bool right_valid = false;
+  bool avg_valid = false;
+  double left_tt = 0.0;
+  double left_ts = 0.0;
+  double right_tt = 0.0;
+  double right_ts = 0.0;
+  double avg_tt = 0.0;
+  double avg_ts = 0.0;
+  std::string label = "Unknown";
+};
+
+static bool GetKpCam(const PoseResult &pose,
+                     const Pose3DInfo &info,
+                     int idx,
+                     float min_conf,
+                     cv::Point3d &out) {
+  if (idx < 0 || idx >= static_cast<int>(info.kp_cam.size())) {
+    return false;
+  }
+  if (!info.kp_valid[idx]) {
+    return false;
+  }
+  if (pose.keypoints[idx].confidence < min_conf) {
+    return false;
+  }
+  out = info.kp_cam[idx];
+  return true;
+}
+
+static bool AngleDeg(const cv::Vec3d &a, const cv::Vec3d &b, double &out_deg) {
+  double na = std::sqrt(a.dot(a));
+  double nb = std::sqrt(b.dot(b));
+  if (na < 1e-6 || nb < 1e-6) {
+    return false;
+  }
+  double cosv = a.dot(b) / (na * nb);
+  cosv = std::max(-1.0, std::min(1.0, cosv));
+  out_deg = std::acos(cosv) * (180.0 / M_PI);
+  return true;
+}
+
+static PostureMetrics ComputePostureMetrics(const PoseResult &pose,
+                                            const Pose3DInfo &info) {
+  PostureMetrics metrics;
+
+  const float min_conf = 0.3f;
+  cv::Point3d lh, rh, ls, rs;
+  bool lh_ok = GetKpCam(pose, info, LEFT_HIP, min_conf, lh);
+  bool rh_ok = GetKpCam(pose, info, RIGHT_HIP, min_conf, rh);
+  bool ls_ok = GetKpCam(pose, info, LEFT_SHOULDER, min_conf, ls);
+  bool rs_ok = GetKpCam(pose, info, RIGHT_SHOULDER, min_conf, rs);
+
+  if (!(lh_ok && rh_ok && ls_ok && rs_ok)) {
+    return metrics;
+  }
+
+  cv::Point3d hip_mid(0.5 * (lh.x + rh.x),
+                      0.5 * (lh.y + rh.y),
+                      0.5 * (lh.z + rh.z));
+  cv::Point3d sh_mid(0.5 * (ls.x + rs.x),
+                     0.5 * (ls.y + rs.y),
+                     0.5 * (ls.z + rs.z));
+  cv::Vec3d trunk(sh_mid.x - hip_mid.x, sh_mid.y - hip_mid.y, sh_mid.z - hip_mid.z);
+
+  cv::Point3d lk, la, rk, ra;
+  bool lk_ok = GetKpCam(pose, info, LEFT_KNEE, min_conf, lk);
+  bool la_ok = GetKpCam(pose, info, LEFT_ANKLE, min_conf, la);
+  bool rk_ok = GetKpCam(pose, info, RIGHT_KNEE, min_conf, rk);
+  bool ra_ok = GetKpCam(pose, info, RIGHT_ANKLE, min_conf, ra);
+
+  if (lh_ok && lk_ok && la_ok) {
+    cv::Vec3d thigh(lk.x - lh.x, lk.y - lh.y, lk.z - lh.z);
+    cv::Vec3d shank(la.x - lk.x, la.y - lk.y, la.z - lk.z);
+    metrics.left_valid =
+        AngleDeg(trunk, thigh, metrics.left_tt) &&
+        AngleDeg(thigh, shank, metrics.left_ts);
+  }
+
+  if (rh_ok && rk_ok && ra_ok) {
+    cv::Vec3d thigh(rk.x - rh.x, rk.y - rh.y, rk.z - rh.z);
+    cv::Vec3d shank(ra.x - rk.x, ra.y - rk.y, ra.z - rk.z);
+    metrics.right_valid =
+        AngleDeg(trunk, thigh, metrics.right_tt) &&
+        AngleDeg(thigh, shank, metrics.right_ts);
+  }
+
+  if (metrics.left_valid && metrics.right_valid) {
+    metrics.avg_tt = 0.5 * (metrics.left_tt + metrics.right_tt);
+    metrics.avg_ts = 0.5 * (metrics.left_ts + metrics.right_ts);
+    metrics.avg_valid = true;
+  } else if (metrics.left_valid) {
+    metrics.avg_tt = metrics.left_tt;
+    metrics.avg_ts = metrics.left_ts;
+    metrics.avg_valid = true;
+  } else if (metrics.right_valid) {
+    metrics.avg_tt = metrics.right_tt;
+    metrics.avg_ts = metrics.right_ts;
+    metrics.avg_valid = true;
+  }
+
+  if (metrics.avg_valid) {
+    if (metrics.avg_tt <= 135.0) {
+      if (metrics.avg_ts <= 135.0) {
+        metrics.label = "Tuck";
+      } else {
+        metrics.label = "Pike";
+      }
+    } else {
+      metrics.label = "Straight";
+    }
+  }
+
+  return metrics;
+}
+
 static void DrawBodyFrameBox(cv::Mat &image,
                              const cv::Mat &R_body_cam,
                              const cv::Point3d &center_cam,
@@ -749,6 +866,13 @@ int main(int argc, char **argv) {
           rotation_tracker.Reset();
         }
       }
+
+      PostureMetrics posture_metrics;
+      if (tracked_pose_index >= 0 &&
+          tracked_pose_index < static_cast<int>(pose_3d_infos.size())) {
+        posture_metrics = ComputePostureMetrics(
+            poses[tracked_pose_index], pose_3d_infos[tracked_pose_index]);
+      }
       auto depth_end = std::chrono::steady_clock::now();
       double depth_time = std::chrono::duration_cast<std::chrono::microseconds>(
           depth_end - depth_start).count() / 1000.0;
@@ -934,6 +1058,12 @@ int main(int argc, char **argv) {
                     cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(200, 200, 200), 1);
       }
 
+      panel_y += line_height;
+      std::ostringstream posture_ss;
+      posture_ss << "Posture: " << posture_metrics.label;
+      cv::putText(display, posture_ss.str(), cv::Point(panel_x, panel_y),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(0, 255, 255), 1);
+
       // Body frame metrics window
       cv::Mat metrics_panel(950, 650, CV_8UC3, cv::Scalar(245, 245, 245));
       int metrics_y = 30;
@@ -1001,6 +1131,49 @@ int main(int argc, char **argv) {
                     cv::Scalar(80, 0, 0), 2);
         metrics_y += metrics_line;
       }
+
+      std::ostringstream posture_line;
+      posture_line << "Posture: " << posture_metrics.label;
+      cv::putText(metrics_panel, posture_line.str(), cv::Point(10, metrics_y),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(20, 20, 20), 2);
+      metrics_y += metrics_line;
+
+      auto format_angle = [](bool valid, double value) {
+        std::ostringstream os;
+        if (!valid) {
+          os << "N/A";
+        } else {
+          os << std::fixed << std::setprecision(1) << value;
+        }
+        return os.str();
+      };
+
+      std::ostringstream left_ss;
+      left_ss << "Left TT/TS (deg): "
+              << format_angle(posture_metrics.left_valid, posture_metrics.left_tt)
+              << " / "
+              << format_angle(posture_metrics.left_valid, posture_metrics.left_ts);
+      cv::putText(metrics_panel, left_ss.str(), cv::Point(10, metrics_y),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 0, 0), 1);
+      metrics_y += metrics_line;
+
+      std::ostringstream right_ss;
+      right_ss << "Right TT/TS (deg): "
+               << format_angle(posture_metrics.right_valid, posture_metrics.right_tt)
+               << " / "
+               << format_angle(posture_metrics.right_valid, posture_metrics.right_ts);
+      cv::putText(metrics_panel, right_ss.str(), cv::Point(10, metrics_y),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 0, 0), 1);
+      metrics_y += metrics_line;
+
+      std::ostringstream avg_ss;
+      avg_ss << "Avg TT/TS (deg): "
+             << format_angle(posture_metrics.avg_valid, posture_metrics.avg_tt)
+             << " / "
+             << format_angle(posture_metrics.avg_valid, posture_metrics.avg_ts);
+      cv::putText(metrics_panel, avg_ss.str(), cv::Point(10, metrics_y),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 0, 0), 1);
+      metrics_y += metrics_line;
 
       metrics_y += 5;
       cv::putText(metrics_panel, "3D Skeleton (trampoline coords, mm):",
