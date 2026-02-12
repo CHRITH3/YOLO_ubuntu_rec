@@ -1,0 +1,14 @@
+{
+  "run_id": "pose_vector_angle_left_explain_20260212T074112Z_6kxkba6",
+  "created_at": "2026-02-12T07:41:37.083894+00:00",
+  "repo": {
+    "path": "/home/chris4/workspace/from_vm/YOLO_rec",
+    "branch": "main",
+    "commit": "8a067415c6ccd04db12187a5b8b12ba1f54e186c",
+    "commit_short": "8a06741",
+    "dirty": true
+  },
+  "policy": {
+    "max_rework_rounds_per_step": 6
+  }
+}

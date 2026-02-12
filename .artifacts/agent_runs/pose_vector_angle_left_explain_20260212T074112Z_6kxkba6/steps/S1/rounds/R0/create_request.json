@@ -1,0 +1,34 @@
+{
+  "task_kind": "step",
+  "task_id": "pose_vector_angle_left_explain",
+  "run_id": "pose_vector_angle_left_explain_20260212T074112Z_6kxkba6",
+  "step_id": "S1",
+  "step_title": "Analyze vectors and angle computation in get_pose_indemind_left.cpp",
+  "step_description": "Locate get_pose_indemind_left.cpp and identify exactly which keypoints are used to build trunk, thigh, and shank vectors; determine each vector direction (from which point to which point); explain how each related angle is computed and map every explanation to concrete code lines. Provide answer in Chinese and keep terminology consistent with the code comments/variables. Do not modify any source file.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "明确给出躯干向量、大腿向量、小腿向量分别由哪些关键点构建，并说明方向（起点->终点）",
+    "明确给出角度计算方法（包括向量运算/夹角公式或代码中实际实现方式）",
+    "每个结论都必须附带 get_pose_indemind_left.cpp 的具体行号引用",
+    "不得修改仓库文件"
+  ],
+  "context": {
+    "repo_overview": "YOLO_rec repository; task is pure code reading and explanation.",
+    "run_dir": ".artifacts/agent_runs/pose_vector_angle_left_explain_20260212T074112Z_6kxkba6/",
+    "related_files": [
+      "get_pose_indemind_left.cpp"
+    ],
+    "constraints": [
+      "Read-only analysis task",
+      "Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"
+    ]
+  },
+  "expected_outputs": [
+    "Chinese explanation with vector definitions, directions, angle formulas, and code line mappings",
+    "Command log proving file/line lookup"
+  ],
+  "allowed_actions": [
+    "read repo files",
+    "run search/navigation commands",
+    "produce analysis report"
+  ]
+}

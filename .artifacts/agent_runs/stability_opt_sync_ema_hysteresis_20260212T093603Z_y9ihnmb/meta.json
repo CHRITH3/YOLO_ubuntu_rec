@@ -1,0 +1,14 @@
+{
+  "run_id": "stability_opt_sync_ema_hysteresis_20260212T093603Z_y9ihnmb",
+  "created_at": "2026-02-12T09:36:21.517978+00:00",
+  "repo": {
+    "path": "/home/chris4/workspace/from_vm/YOLO_rec",
+    "branch": "main",
+    "commit": "b74cbee33cb8051f207f508915f035be50b4b8e9",
+    "commit_short": "b74cbee",
+    "dirty": true
+  },
+  "policy": {
+    "max_rework_rounds_per_step": 6
+  }
+}

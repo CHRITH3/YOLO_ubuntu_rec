@@ -18,13 +18,11 @@
 #include "app/depth_utils.h"
 #include "app/perf_stats.h"
 #include "app/runtime_state.h"
-#include "app/queue_utils.h"
 
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
 
-#include <queue>
 #include <mutex>
 #include <iomanip>
 #include <sstream>
@@ -43,9 +41,6 @@ using namespace indem;
 #define FONT_COLOR cv::Scalar(255, 255, 255)
 #define THICKNESS 1
 
-// Performance optimization: limit queue size to prevent backlog
-#define MAX_QUEUE_SIZE 2
-
 struct Pose3DInfo {
   std::vector<cv::Point3d> kp_cam;
   std::vector<cv::Point3d> kp_bed;
@@ -63,6 +58,18 @@ struct BodyFrame {
   cv::Mat R_rel = cv::Mat::eye(3, 3, CV_64F);
   cv::Vec4d quat{1.0, 0.0, 0.0, 0.0}; // w, x, y, z
   cv::Vec3d euler_rad{0.0, 0.0, 0.0}; // roll(x), pitch(y), yaw(z)
+};
+
+struct TimedFrame {
+  double timestamp = -1.0;
+  cv::Mat frame;
+};
+
+struct BodyBoxMeasurement {
+  bool valid = false;
+  cv::Mat R_body_cam = cv::Mat::eye(3, 3, CV_64F);
+  cv::Point3d center_cam{0, 0, 0};
+  cv::Vec3d half_size{0.0, 0.0, 0.0};
 };
 
 struct RotationTracker {
@@ -154,6 +161,83 @@ static cv::Vec3d RotationMatrixToEulerXYZ(const cv::Mat &R) {
   return cv::Vec3d(roll, pitch, yaw);
 }
 
+static cv::Mat OrthonormalizeRotation(const cv::Mat &R) {
+  if (R.empty() || R.rows != 3 || R.cols != 3) {
+    return cv::Mat::eye(3, 3, CV_64F);
+  }
+  cv::SVD svd(R, cv::SVD::FULL_UV);
+  cv::Mat R_ortho = svd.u * svd.vt;
+  if (cv::determinant(R_ortho) < 0.0) {
+    cv::Mat U = svd.u.clone();
+    U.col(2) *= -1.0;
+    R_ortho = U * svd.vt;
+  }
+  return R_ortho;
+}
+
+static void PushTimedFrame(std::deque<TimedFrame> &buffer,
+                           double timestamp,
+                           const cv::Mat &frame,
+                           std::size_t max_size,
+                           int &drop_count) {
+  if (frame.empty()) {
+    return;
+  }
+  while (buffer.size() >= max_size) {
+    buffer.pop_front();
+    ++drop_count;
+  }
+  buffer.push_back(TimedFrame{timestamp, frame});
+}
+
+static bool PopLatestFrame(std::deque<TimedFrame> &buffer, TimedFrame &out) {
+  if (buffer.empty()) {
+    return false;
+  }
+  out = buffer.back();
+  buffer.clear();
+  return true;
+}
+
+static bool SelectNearestDepthFrame(std::deque<TimedFrame> &depth_buffer,
+                                    double rgb_timestamp,
+                                    cv::Mat &selected_depth,
+                                    double *selected_depth_timestamp,
+                                    double *sync_error_ms) {
+  if (depth_buffer.empty()) {
+    return false;
+  }
+
+  const double kMaxDepthHistorySec = 0.35;
+  while (depth_buffer.size() > 1 &&
+         depth_buffer.front().timestamp < rgb_timestamp - kMaxDepthHistorySec) {
+    depth_buffer.pop_front();
+  }
+
+  std::size_t best_idx = 0;
+  double best_abs_dt = std::numeric_limits<double>::infinity();
+  for (std::size_t i = 0; i < depth_buffer.size(); ++i) {
+    double dt = std::abs(depth_buffer[i].timestamp - rgb_timestamp);
+    if (dt < best_abs_dt) {
+      best_abs_dt = dt;
+      best_idx = i;
+    }
+  }
+
+  selected_depth = depth_buffer[best_idx].frame;
+  if (selected_depth_timestamp != nullptr) {
+    *selected_depth_timestamp = depth_buffer[best_idx].timestamp;
+  }
+  if (sync_error_ms != nullptr) {
+    *sync_error_ms = best_abs_dt * 1000.0;
+  }
+
+  TimedFrame latest = depth_buffer.back();
+  depth_buffer.clear();
+  depth_buffer.push_back(latest);
+  return true;
+}
+
 static bool ProjectPoint(const cv::Point3d &p_cam, const cv::Mat &K, cv::Point &out) {
   if (p_cam.z <= 0.0 || K.empty()) {
     return false;
@@ -176,6 +260,169 @@ struct PostureMetrics {
   double avg_tt = 0.0;
   double avg_ts = 0.0;
   std::string label = "Unknown";
+};
+
+enum class PostureState {
+  Unknown = 0,
+  Pike = 1,
+  Tuck = 2,
+  Straight = 3
+};
+
+static const char *PostureStateToString(PostureState state) {
+  switch (state) {
+    case PostureState::Pike:
+      return "Pike";
+    case PostureState::Tuck:
+      return "Tuck";
+    case PostureState::Straight:
+      return "Straight";
+    case PostureState::Unknown:
+    default:
+      return "Unknown";
+  }
+}
+
+struct PostureHysteresisClassifier {
+  PostureState state = PostureState::Unknown;
+  int missing_count = 0;
+
+  static constexpr int kResetAfterMissingFrames = 6;
+  static constexpr double kTtBentEnter = 132.0;
+  static constexpr double kTtBentExit = 138.0;
+  static constexpr double kTsTuckEnter = 132.0;
+  static constexpr double kTsTuckExit = 138.0;
+
+  void Reset() {
+    state = PostureState::Unknown;
+    missing_count = 0;
+  }
+
+  std::string Update(bool valid, double tt_deg, double ts_deg) {
+    if (!valid) {
+      ++missing_count;
+      if (missing_count >= kResetAfterMissingFrames) {
+        state = PostureState::Unknown;
+      }
+      return PostureStateToString(state);
+    }
+    missing_count = 0;
+
+    if (state == PostureState::Unknown) {
+      if (tt_deg >= 135.0) {
+        state = PostureState::Straight;
+      } else {
+        state = (ts_deg <= 135.0) ? PostureState::Tuck : PostureState::Pike;
+      }
+      return PostureStateToString(state);
+    }
+
+    if (state == PostureState::Straight) {
+      if (tt_deg < kTtBentEnter) {
+        state = (ts_deg <= kTsTuckEnter) ? PostureState::Tuck : PostureState::Pike;
+      }
+      return PostureStateToString(state);
+    }
+
+    if (state == PostureState::Pike) {
+      if (tt_deg >= kTtBentExit) {
+        state = PostureState::Straight;
+      } else if (ts_deg <= kTsTuckEnter) {
+        state = PostureState::Tuck;
+      }
+      return PostureStateToString(state);
+    }
+
+    if (tt_deg >= kTtBentExit) {
+      state = PostureState::Straight;
+    } else if (ts_deg >= kTsTuckExit) {
+      state = PostureState::Pike;
+    }
+    return PostureStateToString(state);
+  }
+};
+
+struct BodyBoxEmaStabilizer {
+  bool initialized = false;
+  int missing_count = 0;
+  cv::Point3d center_cam{0, 0, 0};
+  cv::Mat R_body_cam = cv::Mat::eye(3, 3, CV_64F);
+  cv::Vec3d half_size{0.0, 0.0, 0.0};
+
+  static constexpr int kResetAfterMissingFrames = 3;
+  static constexpr double kCenterJumpResetMm = 900.0;
+  static constexpr double kSizeRatioReset = 2.2;
+  static constexpr double kMinHalfSizeMm = 20.0;
+
+  double alpha_center = 0.35;
+  double alpha_rotation = 0.30;
+  double alpha_size = 0.30;
+
+  void Reset() {
+    initialized = false;
+    missing_count = 0;
+    center_cam = cv::Point3d(0, 0, 0);
+    R_body_cam = cv::Mat::eye(3, 3, CV_64F);
+    half_size = cv::Vec3d(0.0, 0.0, 0.0);
+  }
+
+  bool Update(const BodyBoxMeasurement &input, BodyBoxMeasurement &output) {
+    if (!input.valid || input.R_body_cam.empty()) {
+      ++missing_count;
+      if (missing_count >= kResetAfterMissingFrames) {
+        Reset();
+      }
+      output.valid = false;
+      return false;
+    }
+    missing_count = 0;
+
+    cv::Vec3d clamped_half(
+        std::max(kMinHalfSizeMm, input.half_size[0]),
+        std::max(kMinHalfSizeMm, input.half_size[1]),
+        std::max(kMinHalfSizeMm, input.half_size[2]));
+
+    auto center_distance = [&](const cv::Point3d &a, const cv::Point3d &b) {
+      const double dx = a.x - b.x;
+      const double dy = a.y - b.y;
+      const double dz = a.z - b.z;
+      return std::sqrt(dx * dx + dy * dy + dz * dz);
+    };
+
+    auto size_ratio = [](double a, double b) {
+      const double lo = std::max(1.0, std::min(a, b));
+      const double hi = std::max(a, b);
+      return hi / lo;
+    };
+
+    const bool need_reset = initialized &&
+                            (center_distance(input.center_cam, center_cam) > kCenterJumpResetMm ||
+                             size_ratio(clamped_half[1], half_size[1]) > kSizeRatioReset);
+
+    if (!initialized || need_reset) {
+      initialized = true;
+      center_cam = input.center_cam;
+      R_body_cam = OrthonormalizeRotation(input.R_body_cam);
+      half_size = clamped_half;
+    } else {
+      center_cam = cv::Point3d(
+          center_cam.x * (1.0 - alpha_center) + input.center_cam.x * alpha_center,
+          center_cam.y * (1.0 - alpha_center) + input.center_cam.y * alpha_center,
+          center_cam.z * (1.0 - alpha_center) + input.center_cam.z * alpha_center);
+
+      half_size = half_size * (1.0 - alpha_size) + clamped_half * alpha_size;
+
+      cv::Mat blended = R_body_cam * (1.0 - alpha_rotation) +
+                        input.R_body_cam * alpha_rotation;
+      R_body_cam = OrthonormalizeRotation(blended);
+    }
+
+    output.valid = true;
+    output.center_cam = center_cam;
+    output.R_body_cam = R_body_cam;
+    output.half_size = half_size;
+    return true;
+  }
 };
 
 static bool GetKpCam(const PoseResult &pose,
@@ -206,16 +453,6 @@ static bool AngleDeg(const cv::Vec3d &a, const cv::Vec3d &b, double &out_deg) {
   cosv = std::max(-1.0, std::min(1.0, cosv));
   out_deg = std::acos(cosv) * (180.0 / M_PI);
   return true;
-}
-
-static std::string ClassifyPosture(double tt_deg, double ts_deg) {
-  if (tt_deg <= 135.0) {
-    if (ts_deg <= 135.0) {
-      return "Tuck";
-    }
-    return "Pike";
-  }
-  return "Straight";
 }
 
 static PostureMetrics ComputePostureMetrics(const PoseResult &pose,
@@ -277,18 +514,6 @@ static PostureMetrics ComputePostureMetrics(const PoseResult &pose,
     metrics.avg_tt = metrics.right_tt;
     metrics.avg_ts = metrics.right_ts;
     metrics.avg_valid = true;
-  }
-
-  if (metrics.left_valid && metrics.right_valid) {
-    const std::string left_label = ClassifyPosture(metrics.left_tt, metrics.left_ts);
-    const std::string right_label = ClassifyPosture(metrics.right_tt, metrics.right_ts);
-    if (left_label == right_label) {
-      metrics.label = left_label;
-    }
-  } else if (metrics.left_valid) {
-    metrics.label = ClassifyPosture(metrics.left_tt, metrics.left_ts);
-  } else if (metrics.right_valid) {
-    metrics.label = ClassifyPosture(metrics.right_tt, metrics.right_ts);
   }
 
   return metrics;
@@ -501,11 +726,13 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  // Queue for image stream
-  std::queue<cv::Mat> image_queue;
-  std::queue<cv::Mat> depth_queue;
+  // Timestamped buffers for RGB/depth synchronization.
+  std::deque<TimedFrame> image_buffer;
+  std::deque<TimedFrame> depth_buffer;
   std::mutex mutex_image;
   std::mutex mutex_depth;
+  constexpr std::size_t kMaxImageBufferSize = 4;
+  constexpr std::size_t kMaxDepthBufferSize = 8;
 
   int img_count = 0;
   int pose_count = 0;
@@ -513,6 +740,7 @@ int main(int argc, char **argv) {
   int dropped_images = 0;
   int dropped_depth = 0;
   double last_img_time = -1.0;
+  double depth_sync_error_ms = 0.0;
 
   // Initialize DepthRegion for mouse interaction
   DepthRegion depth_region(3);
@@ -529,6 +757,8 @@ int main(int argc, char **argv) {
   bool recording_data = false;
   std::ofstream csv_file;
   int frame_count = 0;
+  PostureHysteresisClassifier posture_classifier;
+  BodyBoxEmaStabilizer body_box_stabilizer;
 
   // Register image callback - only use left camera
   m_pSDK->RegistImgCallback([&](double time, cv::Mat left, cv::Mat right) {
@@ -543,18 +773,14 @@ int main(int argc, char **argv) {
 
       {
         std::unique_lock<std::mutex> lock(mutex_image);
-        if (image_queue.size() < MAX_QUEUE_SIZE) {
-          // Convert grayscale to BGR for YOLO (which expects color images)
-          cv::Mat color_image;
-          if (left.channels() == 1) {
-            cv::cvtColor(left, color_image, cv::COLOR_GRAY2BGR);
-          } else {
-            color_image = left.clone();
-          }
-          image_queue.push(color_image);
+        // Convert grayscale to BGR for YOLO (which expects color images)
+        cv::Mat color_image;
+        if (left.channels() == 1) {
+          cv::cvtColor(left, color_image, cv::COLOR_GRAY2BGR);
         } else {
-          ++dropped_images;
+          color_image = left.clone();
         }
+        PushTimedFrame(image_buffer, time, color_image, kMaxImageBufferSize, dropped_images);
       }
       ++img_count;
     }
@@ -564,7 +790,6 @@ int main(int argc, char **argv) {
   if (m_pSDK->EnableDepthProcessor()) {
     std::cout << "Depth processor enabled for mouse interaction." << std::endl;
     m_pSDK->RegistDepthCallback([&](double time, cv::Mat depth) {
-      (void)time;
       if (!depth.empty()) {
         // Convert depth from meters to millimeters
         cv::Mat depth_mm;
@@ -572,11 +797,7 @@ int main(int argc, char **argv) {
 
         {
           std::unique_lock<std::mutex> lock(mutex_depth);
-          if (depth_queue.size() < MAX_QUEUE_SIZE) {
-            depth_queue.push(depth_mm);
-          } else {
-            ++dropped_depth;
-          }
+          PushTimedFrame(depth_buffer, time, depth_mm, kMaxDepthBufferSize, dropped_depth);
         }
         ++depth_count;
       }
@@ -631,22 +852,27 @@ int main(int argc, char **argv) {
   // Main loop
   while (true) {
     cv::Mat left_image;
+    double image_timestamp = -1.0;
 
-    // Get image from queue
+    // Always process latest RGB frame.
     {
       std::unique_lock<std::mutex> lock(mutex_image);
-      if (!image_queue.empty()) {
-        left_image = image_queue.front();
-        ClearQueue(image_queue);  // Clear queue to always process latest frame
+      TimedFrame latest_image;
+      if (PopLatestFrame(image_buffer, latest_image)) {
+        left_image = latest_image.frame;
+        image_timestamp = latest_image.timestamp;
       }
     }
 
-    // Get depth from queue
+    // Match nearest depth frame by timestamp for current RGB frame.
     {
       std::unique_lock<std::mutex> lock(mutex_depth);
-      if (!depth_queue.empty()) {
-        depth_data = depth_queue.front();
-        ClearQueue(depth_queue);
+      if (!depth_buffer.empty() && image_timestamp >= 0.0) {
+        double matched_depth_timestamp = -1.0;
+        SelectNearestDepthFrame(depth_buffer, image_timestamp,
+                                depth_data,
+                                &matched_depth_timestamp,
+                                &depth_sync_error_ms);
       }
     }
 
@@ -710,6 +936,12 @@ int main(int argc, char **argv) {
          << inference_time << " ms";
       cv::putText(display, ss.str(), cv::Point(10, display.rows - 35),
                   FONT_FACE, 1.2, cv::Scalar(0, 255, 255), 2);
+
+      ss.str("");
+      ss << "Sync dt: " << std::fixed << std::setprecision(1)
+         << depth_sync_error_ms << " ms";
+      cv::putText(display, ss.str(), cv::Point(10, display.rows - 85),
+                  FONT_FACE, 1.0, cv::Scalar(255, 220, 120), 2);
 
       ss.str("");
       ss << "Detected: " << poses.size() << " person(s)";
@@ -885,6 +1117,9 @@ int main(int argc, char **argv) {
         posture_metrics = ComputePostureMetrics(
             poses[tracked_pose_index], pose_3d_infos[tracked_pose_index]);
       }
+      posture_metrics.label = posture_classifier.Update(
+          posture_metrics.avg_valid, posture_metrics.avg_tt, posture_metrics.avg_ts);
+
       auto depth_end = std::chrono::steady_clock::now();
       double depth_time = std::chrono::duration_cast<std::chrono::microseconds>(
           depth_end - depth_start).count() / 1000.0;
@@ -934,6 +1169,8 @@ int main(int argc, char **argv) {
       if (!depth_data.empty()) {
         depth_region.DrawRect(display);
       }
+
+      bool body_box_updated = false;
 
       // Draw body axes for tracked person
       if (tracked_body_frame.valid && tracked_pose_index >= 0 &&
@@ -1028,13 +1265,31 @@ int main(int argc, char **argv) {
                           tracked_body_frame.R_body_cam.at<double>(2, 1));
         cv::Point3d center_cam = pelvis_cam + y_dir * (torso_height * 0.5);
 
-        DrawBodyFrameBox(display,
-                         tracked_body_frame.R_body_cam,
-                         center_cam,
-                         torso_width * 0.5,
-                         torso_height * 0.5,
-                         torso_depth * 0.5,
-                         cv_in_left);
+        BodyBoxMeasurement raw_box;
+        raw_box.valid = true;
+        raw_box.R_body_cam = tracked_body_frame.R_body_cam;
+        raw_box.center_cam = center_cam;
+        raw_box.half_size = cv::Vec3d(torso_width * 0.5,
+                                      torso_height * 0.5,
+                                      torso_depth * 0.5);
+
+        BodyBoxMeasurement smooth_box;
+        body_box_updated = body_box_stabilizer.Update(raw_box, smooth_box);
+        if (body_box_updated) {
+          DrawBodyFrameBox(display,
+                           smooth_box.R_body_cam,
+                           smooth_box.center_cam,
+                           smooth_box.half_size[0],
+                           smooth_box.half_size[1],
+                           smooth_box.half_size[2],
+                           cv_in_left);
+        }
+      }
+
+      if (!body_box_updated) {
+        BodyBoxMeasurement invalid_box;
+        BodyBoxMeasurement ignored_box;
+        body_box_stabilizer.Update(invalid_box, ignored_box);
       }
 
       // Set mouse callback on YOLO Pose window for depth interaction

@@ -1,0 +1,273 @@
+[
+  {
+    "type": "thread.started",
+    "thread_id": "019c50cc-60ba-7281-8ce8-13a119fba19d"
+  },
+  {
+    "type": "turn.started"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_0",
+      "type": "reasoning",
+      "text": "**Deciding to use strict plan skill**"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_1",
+      "type": "agent_message",
+      "text": "这一步是纯读码分析，我会先定位并打开 `get_pose_indemind_left.cpp`，确认向量构建和角度计算的代码段，再按你给的 8 段输出契约逐项给出中文结论与行号映射。考虑到这是严格验收型步骤，我会按 `zhukong-orchestrator` 的严谨追溯风格执行。"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_2",
+      "type": "reasoning",
+      "text": "**Preparing skill file creation**"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "id": "item_3",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"sed -n '1,220p' /home/chris4/.codex/skills/zhukong-orchestrator_v1.0.1/SKILL.md\"",
+      "aggregated_output": "",
+      "exit_code": null,
+      "status": "in_progress"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_3",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"sed -n '1,220p' /home/chris4/.codex/skills/zhukong-orchestrator_v1.0.1/SKILL.md\"",
+      "aggregated_output": "---\nname: zhukong-orchestrator\ndescription: \\\"主控\\\"编排（Strict Acceptance + Audit + Long-running safe）。当用户说“主控/主控模式/按主控流程”或需要严格 plan→dispatch→verify（含追溯）时使用。**只允许用本技能自带的 shim 源码调度 subagent（禁止调用全局 gxd-subagent-shim）**。\nargument-hint: Paste TASK below (no structured args).\n---\n\n# Zhukong Orchestrator (Local Shim, Low-Friction)\n\n> 这份 `SKILL.md` **就是主控 prompt 本体（source of truth）**。不要再去“读取并拼接其它 prompt 文件”再传给 shim。\n\n## ROLE\n\n你是 **Subagent Orchestrator（Strict Acceptance + Audit + Long-running Safe）**。\n\n你不做任何“动手”工作。所有会改文件/跑命令/产出大块内容的工作一律由 Subagent 完成。\n\n## HARD RULES（不可违反）\n\n1. 你必须 **不直接** 修改任何项目文件（代码、配置、脚本、文档）。\n2. 你必须 **不直接** 运行任何有副作用的命令（构建/测试/格式化/生成文件等）。\n3. 你唯一允许的“执行入口”是：调用 **本技能自带的 shim wrapper** 来触发 Subagent。\n4. 你必须 **不向用户** 展示中间过程或半成品。\n5. 你必须 **不倾倒** Subagent 的原始长输出给用户（长日志/长 diff/长事件流）。\n6. 你只能在两种时刻对用户发言：\n   - ✅ 全部关键步骤验收通过 → 输出一次最终成功报告\n   - ❌ 多轮返工仍失败/或触发超时失败 → 输出一次最终失败报告（含已尝试路径 + 下一步建议）\n\n## 关键优化（相对旧版 skill 的行为约束）\n\n为了解决「多余步骤 + 误用全局 gxd-subagent-shim」的问题，你必须遵守：\n\n* **禁止**：`gxd-subagent-shim --help`、`create --help` 之类的“探路命令”。语法在本文档里已给出。\n* **禁止**：执行 `assets/gxd-subagent-shim-0.2.3`（它是目录/源码，不是可执行文件）。\n* **禁止**：调用 PATH 上的全局 `gxd-subagent-shim`。\n* **默认只拆 1 个 Step（S1）**：在同一个 subagent step 内完成“实现 + 自验证（tests/diff/log）”。\n  - 只有在确实需要隔离风险/依赖（例如：先重构再大改、或需要很长的验证）时才拆 S2/S3。\n\n## LONG-RUN WAIT POLICY（防止打断 Subagent）\n\nSubagent 可能运行很久。你必须严格遵守：\n\n1. **最大等待**：每个 step 的单次 shim 调用（create/resume）最长 60 分钟。\n2. **只要持续有输出就禁止打断**。\n3. **卡死判定**：连续 20 分钟完全无任何输出才允许判定卡死并终止该次运行（reason: NO_OUTPUT_20M）。\n4. 若到达 60 分钟仍未完成 → 记为 FAILED（reason: TIMEOUT_60M）。\n\n## ENVIRONMENT（关键：只用本地 shim 源码）\n\n### 1) 定位 SKILL_ROOT（不需要跑命令）\n\n`SKILL_ROOT` = \"/home/chris4/.codex/skills/zhukong-orchestrator_v1.0.1\"\n\n### 2) 唯一允许的 shim 调用方式（优先级从高到低）\n\n#### A. ✅ 推荐：使用本技能自带 wrapper（永远优先）\n\nwrapper 路径：\n\n```\n<SKILL_ROOT>/assets/bin/gxd-subagent-shim\n```\n\n调用模板（务必显式传 `--run-id/--task-id/--step-id`，避免落到 `S_UNKNOWN`）：\n\n```bash\n<SKILL_ROOT>/assets/bin/gxd-subagent-shim create \"<JSON>\" --backend codex --run-id <RUN_ID> --task-id <TASK_ID> --step-id S1\n<SKILL_ROOT>/assets/bin/gxd-subagent-shim resume \"<JSON>\" <thread_id> --backend codex --run-id <RUN_ID> --task-id <TASK_ID> --step-id S1\n```\n\n#### B. ✅ 兜底：直接跑本地源码（仅当 wrapper 不可执行）\n\n```bash\nPYTHONPATH=\"<SKILL_ROOT>/assets/gxd-subagent-shim-0.2.3\" \\\n  python -m gxd_subagent_shim create \"<JSON>\" --backend codex --run-id <RUN_ID> --task-id <TASK_ID> --step-id S1\n\nPYTHONPATH=\"<SKILL_ROOT>/assets/gxd-subagent-shim-0.2.3\" \\\n  python -m gxd_subagent_shim resume \"<JSON>\" <thread_id> --backend codex --run-id <RUN_ID> --task-id <TASK_ID> --step-id S1\n```\n\n#### C. ❌ 禁用：全局 `gxd-subagent-shim`\n\n除非用户明确要求，否则不得使用。\n\n## INPUT\n\n将用户输入视为顶层任务 `TASK`。\n\n## TASK\n\n{{PASTE_USER_TASK_HERE}}\n\n## MANDATORY PIPELINE（每个 TASK 必走）\n\n### A) Extract（内部）\n\n从 TASK 提取：\n\n* 目标（要交付什么）\n* 范围（模块/目录/栈）\n* 约束（兼容性/不可改接口/时间等）\n* 成功标准（什么算完成）\n\n除非客观缺少必须的人类决策信息，否则不要向用户提问。\n\n### B) Plan（内部，尽量少 Step）\n\n拆成 `S1..SN` 串行步骤（依赖顺序 FIFO）。\n\n**默认只生成 S1**：由同一个 Subagent 完成实现 + 自验证。\n\n每个 step 必须包含：\n\n* id / title / category（code|test|doc|infra|analysis）\n* description（2–4 句，Subagent 可执行）\n* dependencies\n* acceptance_criteria（≥ 3 条，必须可验证）\n* expected_outputs（文件/命令/产物）\n\n同时生成：\n\n* `TASK_ID`：稳定标识（简短 + 唯一）\n* `RUN_ID`：本次追溯目录名（所有 shim 调用必须复用同一个 RUN_ID）\n\n推荐 `RUN_ID`：\n\n```\n<TASK_ID>_<YYYYMMDDThhmmssZ>_<rand7>\n```\n\n### C) Trace & Audit（强制，shim-owned）\n\n* 所有 Subagent create/resume 必须通过 **本技能的本地 shim wrapper** 调用。\n* 追溯材料以 `.artifacts/agent_runs/<RUN_ID>/...` 为准（而不是 Subagent 自己“说”它做了什么）。\n\n### D) Dispatch（内部）\n\n对每个 step：\n\n1. create subagent（如已有则复用其 thread_id）\n2. 等待产物（遵守 LONG-RUN WAIT POLICY）\n3. 严格验收（基于：Subagent 输出 + `.artifacts` 里的证据）\n4. 不达标 → 生成差分化返工 JSON → resume\n5. 超过返工上限仍失败 → 标记 step FAILED → TASK 失败\n\n全局验收纪律（强制）：\n\n* Subagent 只能修改该 step 明确允许的范围/文件；出现无关文件改动 → 直接 REWORK。\n* 任何 “tests PASS / build PASS” 的声明必须有证据（日志/命令输出路径），否则视为未通过。\n\n## SUBAGENT INSTRUCTION TEMPLATE（你生成给 Subagent 的 JSON 必含）\n\n### Output Contract（必须注入每个执行型 Step 的 step_description）\n\n固定文本（原样贴进去）：\n\n```\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide\n```\n\n### 执行型 Step（S1..SN）create JSON 模板\n\n```json\n{\n  \"task_kind\": \"step\",\n  \"task_id\": \"<TASK_ID>\",\n  \"run_id\": \"<RUN_ID>\",\n  \"step_id\": \"S1\",\n  \"step_title\": \"<TITLE>\",\n  \"step_description\": \"<2-4 sentences describing the work>\\n\\nOutput Contract (MUST follow exactly, missing any section => REWORK):\\n1. Step Identification\\n2. Summary of Work\\n3. Files Changed\\n4. Commands Executed\\n5. Verification Results\\n6. Logs / Artifacts\\n7. Risks & Limitations\\n8. Reproduction Guide\",\n  \"acceptance_criteria\": [\n    \"<AC1>\",\n    \"<AC2>\",\n    \"<AC3>\"\n  ],\n  \"context\": {\n    \"repo_overview\": \"<short>\",\n    \"run_dir\": \".artifacts/agent_runs/<RUN_ID>/\",\n    \"related_files\": [\"<paths>\", \"...\"],\n    \"constraints\": [\n      \"<constraints>\",\n      \"Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step\"\n    ]\n  },\n  \"expected_outputs\": [\"<files/commands/artifacts>\", \"...\"],\n  \"allowed_actions\": [\n    \"edit repo files\",\n    \"run build/test commands\",\n    \"write/update docs\"\n  ]\n}\n```\n\n## REWORK JSON TEMPLATE（差分化返工）\n\n```json\n{\n  \"feedback_kind\": \"rework\",\n  \"step_id\": \"S1\",\n  \"overall_assessment\": \"partial_failure\",\n  \"problems\": [\n    {\n      \"criteria\": \"<verbatim AC>\",\n      \"issue\": \"<what is missing/wrong>\",\n      \"evidence\": \"<what you saw / what's absent (include .artifacts paths when possible)>\",\n      \"impact\": \"<why it matters>\"\n    }\n  ],\n  \"required_changes\": [\"...\"],\n  \"next_actions\": [\"...\"],\n  \"rework_policy\": {\n    \"must_reduce_open_issues\": true,\n    \"no_new_scope\": true\n",
+      "exit_code": 0,
+      "status": "completed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_4",
+      "type": "reasoning",
+      "text": "**Clarifying skill versus agent roles**"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_5",
+      "type": "agent_message",
+      "text": "我已加载主控技能说明并仅借用其“严格验收+可追溯”格式，不会改动任何源码。下一步开始精确定位目标文件并抓取带行号内容。"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "id": "item_6",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc 'git status --short'",
+      "aggregated_output": "",
+      "exit_code": null,
+      "status": "in_progress"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "id": "item_7",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"pwd && rg --files | rg 'get_pose_indemind_left.cpp\"'$'\"'\"",
+      "aggregated_output": "",
+      "exit_code": null,
+      "status": "in_progress"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_6",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc 'git status --short'",
+      "aggregated_output": " M build/CMakeFiles/CMakeOutput.log\n M build/CMakeFiles/yolo_pose_indemind_left.dir/get_pose_indemind_left.cpp.o\n M docs/project_cpp_architecture_guide.md\n M get_pose_indemind_left.cpp\nR  models/yolov8m-pose.onnx -> models/yolov8m-pose-1280.onnx\nA  models/yolov8n-pose-1280.onnx\nR  models/yolov8n-pose.onnx -> models/yolov8n-pose-640.onnx\n M subagent.log\n?? .artifacts/agent_runs/pose_vector_angle_left_explain_20260212T074112Z_6kxkba6/\n?? .claude/\n?? .codex/\n?? build/CMakeFiles/yolo_pose_indemind_left.dir/app/\n?? build_agent/\n?? build_agent_out/\n?? build_cleanup/\n?? build_refactor/\n?? trampoline_backend.zip\n",
+      "exit_code": 0,
+      "status": "completed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_7",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"pwd && rg --files | rg 'get_pose_indemind_left.cpp\"'$'\"'\"",
+      "aggregated_output": "/home/chris4/workspace/from_vm/YOLO_rec\nget_pose_indemind_left.cpp\n",
+      "exit_code": 0,
+      "status": "completed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_8",
+      "type": "reasoning",
+      "text": "**Planning focused code inspection**"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "id": "item_9",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc 'rg -n \"trunk|thigh|shank|angle|向量|夹角|躯干|大腿|小腿|hip|knee|ankle|shoulder\" get_pose_indemind_left.cpp'",
+      "aggregated_output": "",
+      "exit_code": null,
+      "status": "in_progress"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "id": "item_10",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"nl -ba get_pose_indemind_left.cpp | sed -n '261,520p'\"",
+      "aggregated_output": "",
+      "exit_code": null,
+      "status": "in_progress"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "id": "item_11",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"nl -ba get_pose_indemind_left.cpp | sed -n '1,260p'\"",
+      "aggregated_output": "",
+      "exit_code": null,
+      "status": "in_progress"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_11",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"nl -ba get_pose_indemind_left.cpp | sed -n '1,260p'\"",
+      "aggregated_output": "     1\t// Copyright 2020 Indemind Co., Ltd. All rights reserved.\n     2\t//\n     3\t// Human Pose Detection using INDEMIND Left Camera (RGB Only)\n     4\t// Uses left camera image from INDEMIND dual-camera system\n     5\t// No depth processing - pure RGB pose detection\n     6\t//\n     7\t\n     8\t#include \"imrdata.h\"\n     9\t#include \"imrsdk.h\"\n    10\t#include \"logging.h\"\n    11\t#include \"types.h\"\n    12\t\n    13\t#include \"yolo_pose_detector.h\"\n    14\t#include \"pose_utils.h\"\n    15\t\n    16\t#include \"app/camera_intrinsics.h\"\n    17\t#include \"app/depth_region.h\"\n    18\t#include \"app/depth_utils.h\"\n    19\t#include \"app/perf_stats.h\"\n    20\t#include \"app/runtime_state.h\"\n    21\t#include \"app/queue_utils.h\"\n    22\t\n    23\t#include <opencv2/highgui.hpp>\n    24\t#include <opencv2/imgproc.hpp>\n    25\t#include <opencv2/opencv.hpp>\n    26\t\n    27\t#include <queue>\n    28\t#include <mutex>\n    29\t#include <iomanip>\n    30\t#include <sstream>\n    31\t#include <chrono>\n    32\t#include <algorithm>\n    33\t#include <array>\n    34\t#include <cmath>\n    35\t#include <fstream>\n    36\t#include <deque>\n    37\t#include <limits>\n    38\t\n    39\tusing namespace indem;\n    40\t\n    41\t#define FONT_FACE cv::FONT_HERSHEY_PLAIN\n    42\t#define FONT_SCALE 1\n    43\t#define FONT_COLOR cv::Scalar(255, 255, 255)\n    44\t#define THICKNESS 1\n    45\t\n    46\t// Performance optimization: limit queue size to prevent backlog\n    47\t#define MAX_QUEUE_SIZE 2\n    48\t\n    49\tstruct Pose3DInfo {\n    50\t  std::vector<cv::Point3d> kp_cam;\n    51\t  std::vector<cv::Point3d> kp_bed;\n    52\t  std::vector<bool> kp_valid;\n    53\t  bool pelvis_valid = false;\n    54\t  cv::Point3d pelvis_cam{0, 0, 0};\n    55\t  cv::Point3d pelvis_bed{0, 0, 0};\n    56\t};\n    57\t\n    58\tstruct BodyFrame {\n    59\t  bool valid = false;\n    60\t  cv::Point3d origin_bed{0, 0, 0};\n    61\t  cv::Mat R_body_bed = cv::Mat::eye(3, 3, CV_64F);\n    62\t  cv::Mat R_body_cam = cv::Mat::eye(3, 3, CV_64F);\n    63\t  cv::Mat R_rel = cv::Mat::eye(3, 3, CV_64F);\n    64\t  cv::Vec4d quat{1.0, 0.0, 0.0, 0.0}; // w, x, y, z\n    65\t  cv::Vec3d euler_rad{0.0, 0.0, 0.0}; // roll(x), pitch(y), yaw(z)\n    66\t};\n    67\t\n    68\tstruct RotationTracker {\n    69\t  bool initialized = false;\n    70\t  cv::Vec3d last_angles{0.0, 0.0, 0.0};\n    71\t  cv::Vec3d cumulative{0.0, 0.0, 0.0};\n    72\t\n    73\t  void Reset() {\n    74\t    initialized = false;\n    75\t    last_angles = cv::Vec3d(0.0, 0.0, 0.0);\n    76\t    cumulative = cv::Vec3d(0.0, 0.0, 0.0);\n    77\t  }\n    78\t\n    79\t  void Update(const cv::Vec3d &angles_rad) {\n    80\t    if (!initialized) {\n    81\t      last_angles = angles_rad;\n    82\t      initialized = true;\n    83\t      return;\n    84\t    }\n    85\t    for (int i = 0; i < 3; ++i) {\n    86\t      double delta = angles_rad[i] - last_angles[i];\n    87\t      while (delta > M_PI) delta -= 2.0 * M_PI;\n    88\t      while (delta < -M_PI) delta += 2.0 * M_PI;\n    89\t      cumulative[i] += delta;\n    90\t      last_angles[i] = angles_rad[i];\n    91\t    }\n    92\t  }\n    93\t};\n    94\t\n    95\tstatic bool NormalizeVec(const cv::Vec3d &v, cv::Vec3d &out) {\n    96\t  double n = std::sqrt(v.dot(v));\n    97\t  if (n < 1e-6) {\n    98\t    return false;\n    99\t  }\n   100\t  out = v / n;\n   101\t  return true;\n   102\t}\n   103\t\n   104\tstatic cv::Vec4d RotationMatrixToQuaternion(const cv::Mat &R) {\n   105\t  cv::Vec4d q(1.0, 0.0, 0.0, 0.0);\n   106\t  if (R.empty()) {\n   107\t    return q;\n   108\t  }\n   109\t  double trace = R.at<double>(0, 0) + R.at<double>(1, 1) + R.at<double>(2, 2);\n   110\t  if (trace > 0.0) {\n   111\t    double s = std::sqrt(trace + 1.0) * 2.0;\n   112\t    q[0] = 0.25 * s;\n   113\t    q[1] = (R.at<double>(2, 1) - R.at<double>(1, 2)) / s;\n   114\t    q[2] = (R.at<double>(0, 2) - R.at<double>(2, 0)) / s;\n   115\t    q[3] = (R.at<double>(1, 0) - R.at<double>(0, 1)) / s;\n   116\t  } else {\n   117\t    if (R.at<double>(0, 0) > R.at<double>(1, 1) &&\n   118\t        R.at<double>(0, 0) > R.at<double>(2, 2)) {\n   119\t      double s = std::sqrt(1.0 + R.at<double>(0, 0) - R.at<double>(1, 1) - R.at<double>(2, 2)) * 2.0;\n   120\t      q[0] = (R.at<double>(2, 1) - R.at<double>(1, 2)) / s;\n   121\t      q[1] = 0.25 * s;\n   122\t      q[2] = (R.at<double>(0, 1) + R.at<double>(1, 0)) / s;\n   123\t      q[3] = (R.at<double>(0, 2) + R.at<double>(2, 0)) / s;\n   124\t    } else if (R.at<double>(1, 1) > R.at<double>(2, 2)) {\n   125\t      double s = std::sqrt(1.0 + R.at<double>(1, 1) - R.at<double>(0, 0) - R.at<double>(2, 2)) * 2.0;\n   126\t      q[0] = (R.at<double>(0, 2) - R.at<double>(2, 0)) / s;\n   127\t      q[1] = (R.at<double>(0, 1) + R.at<double>(1, 0)) / s;\n   128\t      q[2] = 0.25 * s;\n   129\t      q[3] = (R.at<double>(1, 2) + R.at<double>(2, 1)) / s;\n   130\t    } else {\n   131\t      double s = std::sqrt(1.0 + R.at<double>(2, 2) - R.at<double>(0, 0) - R.at<double>(1, 1)) * 2.0;\n   132\t      q[0] = (R.at<double>(1, 0) - R.at<double>(0, 1)) / s;\n   133\t      q[1] = (R.at<double>(0, 2) + R.at<double>(2, 0)) / s;\n   134\t      q[2] = (R.at<double>(1, 2) + R.at<double>(2, 1)) / s;\n   135\t      q[3] = 0.25 * s;\n   136\t    }\n   137\t  }\n   138\t  return q;\n   139\t}\n   140\t\n   141\tstatic cv::Vec3d RotationMatrixToEulerXYZ(const cv::Mat &R) {\n   142\t  if (R.empty()) {\n   143\t    return cv::Vec3d(0.0, 0.0, 0.0);\n   144\t  }\n   145\t  double r00 = R.at<double>(0, 0);\n   146\t  double r10 = R.at<double>(1, 0);\n   147\t  double r20 = R.at<double>(2, 0);\n   148\t  double r21 = R.at<double>(2, 1);\n   149\t  double r22 = R.at<double>(2, 2);\n   150\t\n   151\t  double pitch = std::asin(std::max(-1.0, std::min(1.0, -r20)));\n   152\t  double roll = std::atan2(r21, r22);\n   153\t  double yaw = std::atan2(r10, r00);\n   154\t  return cv::Vec3d(roll, pitch, yaw);\n   155\t}\n   156\t\n   157\tstatic bool ProjectPoint(const cv::Point3d &p_cam, const cv::Mat &K, cv::Point &out) {\n   158\t  if (p_cam.z <= 0.0 || K.empty()) {\n   159\t    return false;\n   160\t  }\n   161\t  cv::Mat pt_cam = (cv::Mat_<double>(3, 1) << p_cam.x, p_cam.y, p_cam.z);\n   162\t  cv::Mat pt_img = K * pt_cam / p_cam.z;\n   163\t  out = cv::Point(static_cast<int>(pt_img.at<double>(0, 0)),\n   164\t                  static_cast<int>(pt_img.at<double>(1, 0)));\n   165\t  return true;\n   166\t}\n   167\t\n   168\tstruct PostureMetrics {\n   169\t  bool left_valid = false;\n   170\t  bool right_valid = false;\n   171\t  bool avg_valid = false;\n   172\t  double left_tt = 0.0;\n   173\t  double left_ts = 0.0;\n   174\t  double right_tt = 0.0;\n   175\t  double right_ts = 0.0;\n   176\t  double avg_tt = 0.0;\n   177\t  double avg_ts = 0.0;\n   178\t  std::string label = \"Unknown\";\n   179\t};\n   180\t\n   181\tstatic bool GetKpCam(const PoseResult &pose,\n   182\t                     const Pose3DInfo &info,\n   183\t                     int idx,\n   184\t                     float min_conf,\n   185\t                     cv::Point3d &out) {\n   186\t  if (idx < 0 || idx >= static_cast<int>(info.kp_cam.size())) {\n   187\t    return false;\n   188\t  }\n   189\t  if (!info.kp_valid[idx]) {\n   190\t    return false;\n   191\t  }\n   192\t  if (pose.keypoints[idx].confidence < min_conf) {\n   193\t    return false;\n   194\t  }\n   195\t  out = info.kp_cam[idx];\n   196\t  return true;\n   197\t}\n   198\t\n   199\tstatic bool AngleDeg(const cv::Vec3d &a, const cv::Vec3d &b, double &out_deg) {\n   200\t  double na = std::sqrt(a.dot(a));\n   201\t  double nb = std::sqrt(b.dot(b));\n   202\t  if (na < 1e-6 || nb < 1e-6) {\n   203\t    return false;\n   204\t  }\n   205\t  double cosv = a.dot(b) / (na * nb);\n   206\t  cosv = std::max(-1.0, std::min(1.0, cosv));\n   207\t  out_deg = std::acos(cosv) * (180.0 / M_PI);\n   208\t  return true;\n   209\t}\n   210\t\n   211\tstatic std::string ClassifyPosture(double tt_deg, double ts_deg) {\n   212\t  if (tt_deg <= 135.0) {\n   213\t    if (ts_deg <= 135.0) {\n   214\t      return \"Tuck\";\n   215\t    }\n   216\t    return \"Pike\";\n   217\t  }\n   218\t  return \"Straight\";\n   219\t}\n   220\t\n   221\tstatic PostureMetrics ComputePostureMetrics(const PoseResult &pose,\n   222\t                                            const Pose3DInfo &info) {\n   223\t  PostureMetrics metrics;\n   224\t\n   225\t  const float min_conf = 0.3f;\n   226\t  cv::Point3d lh, rh, ls, rs;\n   227\t  bool lh_ok = GetKpCam(pose, info, LEFT_HIP, min_conf, lh);\n   228\t  bool rh_ok = GetKpCam(pose, info, RIGHT_HIP, min_conf, rh);\n   229\t  bool ls_ok = GetKpCam(pose, info, LEFT_SHOULDER, min_conf, ls);\n   230\t  bool rs_ok = GetKpCam(pose, info, RIGHT_SHOULDER, min_conf, rs);\n   231\t\n   232\t  if (!(lh_ok && rh_ok && ls_ok && rs_ok)) {\n   233\t    return metrics;\n   234\t  }\n   235\t\n   236\t  cv::Point3d hip_mid(0.5 * (lh.x + rh.x),\n   237\t                      0.5 * (lh.y + rh.y),\n   238\t                      0.5 * (lh.z + rh.z));\n   239\t  cv::Point3d sh_mid(0.5 * (ls.x + rs.x),\n   240\t                     0.5 * (ls.y + rs.y),\n   241\t                     0.5 * (ls.z + rs.z));\n   242\t  cv::Vec3d trunk(sh_mid.x - hip_mid.x, sh_mid.y - hip_mid.y, sh_mid.z - hip_mid.z);\n   243\t\n   244\t  cv::Point3d lk, la, rk, ra;\n   245\t  bool lk_ok = GetKpCam(pose, info, LEFT_KNEE, min_conf, lk);\n   246\t  bool la_ok = GetKpCam(pose, info, LEFT_ANKLE, min_conf, la);\n   247\t  bool rk_ok = GetKpCam(pose, info, RIGHT_KNEE, min_conf, rk);\n   248\t  bool ra_ok = GetKpCam(pose, info, RIGHT_ANKLE, min_conf, ra);\n   249\t\n   250\t  if (lh_ok && lk_ok && la_ok) {\n   251\t    cv::Vec3d thigh(lk.x - lh.x, lk.y - lh.y, lk.z - lh.z);\n   252\t    cv::Vec3d shank(la.x - lk.x, la.y - lk.y, la.z - lk.z);\n   253\t    metrics.left_valid =\n   254\t        AngleDeg(trunk, thigh, metrics.left_tt) &&\n   255\t        AngleDeg(thigh, shank, metrics.left_ts);\n   256\t  }\n   257\t\n   258\t  if (rh_ok && rk_ok && ra_ok) {\n   259\t    cv::Vec3d thigh(rk.x - rh.x, rk.y - rh.y, rk.z - rh.z);\n   260\t    cv::Vec3d shank(ra.x - rk.x, ra.y - rk.y, ra.z - rk.z);\n",
+      "exit_code": 0,
+      "status": "completed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_10",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"nl -ba get_pose_indemind_left.cpp | sed -n '261,520p'\"",
+      "aggregated_output": "   261\t    metrics.right_valid =\n   262\t        AngleDeg(trunk, thigh, metrics.right_tt) &&\n   263\t        AngleDeg(thigh, shank, metrics.right_ts);\n   264\t  }\n   265\t\n   266\t  if (metrics.left_valid && metrics.right_valid) {\n   267\t    metrics.avg_tt = 0.5 * (metrics.left_tt + metrics.right_tt);\n   268\t    metrics.avg_ts = 0.5 * (metrics.left_ts + metrics.right_ts);\n   269\t    metrics.avg_valid = true;\n   270\t  } else if (metrics.left_valid) {\n   271\t    metrics.avg_tt = metrics.left_tt;\n   272\t    metrics.avg_ts = metrics.left_ts;\n   273\t    metrics.avg_valid = true;\n   274\t  } else if (metrics.right_valid) {\n   275\t    metrics.avg_tt = metrics.right_tt;\n   276\t    metrics.avg_ts = metrics.right_ts;\n   277\t    metrics.avg_valid = true;\n   278\t  }\n   279\t\n   280\t  if (metrics.left_valid && metrics.right_valid) {\n   281\t    const std::string left_label = ClassifyPosture(metrics.left_tt, metrics.left_ts);\n   282\t    const std::string right_label = ClassifyPosture(metrics.right_tt, metrics.right_ts);\n   283\t    if (left_label == right_label) {\n   284\t      metrics.label = left_label;\n   285\t    }\n   286\t  } else if (metrics.left_valid) {\n   287\t    metrics.label = ClassifyPosture(metrics.left_tt, metrics.left_ts);\n   288\t  } else if (metrics.right_valid) {\n   289\t    metrics.label = ClassifyPosture(metrics.right_tt, metrics.right_ts);\n   290\t  }\n   291\t\n   292\t  return metrics;\n   293\t}\n   294\t\n   295\tstatic void DrawBodyFrameBox(cv::Mat &image,\n   296\t                             const cv::Mat &R_body_cam,\n   297\t                             const cv::Point3d &center_cam,\n   298\t                             double half_x,\n   299\t                             double half_y,\n   300\t                             double half_z,\n   301\t                             const cv::Mat &K) {\n   302\t  if (R_body_cam.empty() || K.empty()) {\n   303\t    return;\n   304\t  }\n   305\t\n   306\t  std::array<cv::Point3d, 8> corners_body = {\n   307\t      cv::Point3d(-half_x, -half_y, -half_z),\n   308\t      cv::Point3d(half_x, -half_y, -half_z),\n   309\t      cv::Point3d(half_x, half_y, -half_z),\n   310\t      cv::Point3d(-half_x, half_y, -half_z),\n   311\t      cv::Point3d(-half_x, -half_y, half_z),\n   312\t      cv::Point3d(half_x, -half_y, half_z),\n   313\t      cv::Point3d(half_x, half_y, half_z),\n   314\t      cv::Point3d(-half_x, half_y, half_z)\n   315\t  };\n   316\t\n   317\t  std::array<cv::Point, 8> corners_2d;\n   318\t  std::array<bool, 8> visible{};\n   319\t\n   320\t  for (size_t i = 0; i < corners_body.size(); ++i) {\n   321\t    const cv::Point3d &p_body = corners_body[i];\n   322\t    cv::Point3d p_cam(\n   323\t        center_cam.x + R_body_cam.at<double>(0, 0) * p_body.x +\n   324\t            R_body_cam.at<double>(0, 1) * p_body.y + R_body_cam.at<double>(0, 2) * p_body.z,\n   325\t        center_cam.y + R_body_cam.at<double>(1, 0) * p_body.x +\n   326\t            R_body_cam.at<double>(1, 1) * p_body.y + R_body_cam.at<double>(1, 2) * p_body.z,\n   327\t        center_cam.z + R_body_cam.at<double>(2, 0) * p_body.x +\n   328\t            R_body_cam.at<double>(2, 1) * p_body.y + R_body_cam.at<double>(2, 2) * p_body.z);\n   329\t    visible[i] = ProjectPoint(p_cam, K, corners_2d[i]);\n   330\t  }\n   331\t\n   332\t  auto draw_edge = [&](int a, int b) {\n   333\t    if (visible[a] && visible[b]) {\n   334\t      cv::line(image, corners_2d[a], corners_2d[b], cv::Scalar(0, 200, 255), 2, cv::LINE_AA);\n   335\t    }\n   336\t  };\n   337\t\n   338\t  draw_edge(0, 1);\n   339\t  draw_edge(1, 2);\n   340\t  draw_edge(2, 3);\n   341\t  draw_edge(3, 0);\n   342\t  draw_edge(4, 5);\n   343\t  draw_edge(5, 6);\n   344\t  draw_edge(6, 7);\n   345\t  draw_edge(7, 4);\n   346\t  draw_edge(0, 4);\n   347\t  draw_edge(1, 5);\n   348\t  draw_edge(2, 6);\n   349\t  draw_edge(3, 7);\n   350\t}\n   351\t\n   352\tstatic bool BuildBodyFrameFromPose(const PoseResult &pose,\n   353\t                                   const Pose3DInfo &info,\n   354\t                                   const cv::Mat &R_bed_cam,\n   355\t                                   BodyFrame &out) {\n   356\t  if (R_bed_cam.empty()) {\n   357\t    return false;\n   358\t  }\n   359\t\n   360\t  auto kp_ok = [&](int idx, cv::Point3d &pt) -> bool {\n   361\t    if (idx < 0 || idx >= static_cast<int>(info.kp_bed.size())) {\n   362\t      return false;\n   363\t    }\n   364\t    if (!info.kp_valid[idx]) {\n   365\t      return false;\n   366\t    }\n   367\t    if (pose.keypoints[idx].confidence < 0.3f) {\n   368\t      return false;\n   369\t    }\n   370\t    pt = info.kp_bed[idx];\n   371\t    return true;\n   372\t  };\n   373\t\n   374\t  cv::Point3d lh, rh, ls, rs;\n   375\t  bool lh_ok = kp_ok(LEFT_HIP, lh);\n   376\t  bool rh_ok = kp_ok(RIGHT_HIP, rh);\n   377\t  bool ls_ok = kp_ok(LEFT_SHOULDER, ls);\n   378\t  bool rs_ok = kp_ok(RIGHT_SHOULDER, rs);\n   379\t\n   380\t  if ((!lh_ok && !rh_ok) || (!ls_ok && !rs_ok)) {\n   381\t    return false;\n   382\t  }\n   383\t\n   384\t  cv::Point3d pelvis = lh_ok && rh_ok\n   385\t                           ? cv::Point3d(0.5 * (lh.x + rh.x), 0.5 * (lh.y + rh.y), 0.5 * (lh.z + rh.z))\n   386\t                           : (lh_ok ? lh : rh);\n   387\t\n   388\t  cv::Point3d shoulders = ls_ok && rs_ok\n   389\t                              ? cv::Point3d(0.5 * (ls.x + rs.x), 0.5 * (ls.y + rs.y), 0.5 * (ls.z + rs.z))\n   390\t                              : (ls_ok ? ls : rs);\n   391\t\n   392\t  // Define body axes in bed coordinates:\n   393\t  // y_body: hip_mid -> shoulder_mid\n   394\t  // x_body: right_hip -> left_hip (left minus right)\n   395\t  // z_body: x_body × y_body\n   396\t  cv::Vec3d y_raw(shoulders.x - pelvis.x, shoulders.y - pelvis.y, shoulders.z - pelvis.z);\n   397\t  cv::Vec3d x_raw(0.0, 0.0, 0.0);\n   398\t  if (lh_ok && rh_ok) {\n   399\t    x_raw = cv::Vec3d(lh.x - rh.x, lh.y - rh.y, lh.z - rh.z);\n   400\t  } else if (ls_ok && rs_ok) {\n   401\t    x_raw = cv::Vec3d(ls.x - rs.x, ls.y - rs.y, ls.z - rs.z);\n   402\t  } else {\n   403\t    return false;\n   404\t  }\n   405\t\n   406\t  cv::Vec3d x_axis;\n   407\t  if (!NormalizeVec(x_raw, x_axis)) {\n   408\t    return false;\n   409\t  }\n   410\t\n   411\t  // Gram-Schmidt: make y orthogonal to x, then normalize.\n   412\t  cv::Vec3d y_orth = y_raw - x_axis * (y_raw.dot(x_axis));\n   413\t  cv::Vec3d y_axis;\n   414\t  if (!NormalizeVec(y_orth, y_axis)) {\n   415\t    return false;\n   416\t  }\n   417\t\n   418\t  cv::Vec3d z_axis = x_axis.cross(y_axis);\n   419\t  if (!NormalizeVec(z_axis, z_axis)) {\n   420\t    return false;\n   421\t  }\n   422\t\n   423\t  out.origin_bed = pelvis;\n   424\t  out.R_body_bed = cv::Mat::eye(3, 3, CV_64F);\n   425\t  out.R_body_bed.at<double>(0, 0) = x_axis[0];\n   426\t  out.R_body_bed.at<double>(1, 0) = x_axis[1];\n   427\t  out.R_body_bed.at<double>(2, 0) = x_axis[2];\n   428\t\n   429\t  out.R_body_bed.at<double>(0, 1) = y_axis[0];\n   430\t  out.R_body_bed.at<double>(1, 1) = y_axis[1];\n   431\t  out.R_body_bed.at<double>(2, 1) = y_axis[2];\n   432\t\n   433\t  out.R_body_bed.at<double>(0, 2) = z_axis[0];\n   434\t  out.R_body_bed.at<double>(1, 2) = z_axis[1];\n   435\t  out.R_body_bed.at<double>(2, 2) = z_axis[2];\n   436\t\n   437\t  out.R_body_cam = R_bed_cam * out.R_body_bed;\n   438\t  out.R_rel = R_bed_cam.t() * out.R_body_cam;\n   439\t  out.quat = RotationMatrixToQuaternion(out.R_rel);\n   440\t  out.euler_rad = RotationMatrixToEulerXYZ(out.R_rel);\n   441\t  out.valid = true;\n   442\t  return true;\n   443\t}\n   444\t\n   445\tint main(int argc, char **argv) {\n   446\t  (void)argc;\n   447\t\n   448\t  // Check model file\n   449\t  std::string model_path = \"models/yolov8m-pose-1280.onnx\";\n   450\t  if (argc > 1) {\n   451\t    model_path = argv[1];\n   452\t  }\n   453\t\n   454\t  std::cout << \"\\n=== YOLO Pose Detection with INDEMIND Left Camera ===\\n\" << std::endl;\n   455\t  std::cout << \"Using: Left camera RGB image only (no depth processing)\" << std::endl;\n   456\t\n   457\t  // Initialize IMSEE SDK\n   458\t  auto m_pSDK = new CIMRSDK();\n   459\t  MRCONFIG config = {0};\n   460\t  config.bSlam = false;\n   461\t  config.imgResolution = IMG_1280;\n   462\t  config.imgFrequency = 50;\n   463\t  config.imuFrequency = 0;  // Disabled for performance\n   464\t\n   465\t  std::cout << \"\\nInitializing INDEMIND camera...\" << std::endl;\n   466\t  bool init_result = m_pSDK->Init(config);\n   467\t  if (!init_result) {\n   468\t    std::cerr << \"ERROR: Failed to initialize INDEMIND SDK!\" << std::endl;\n   469\t    delete m_pSDK;\n   470\t    return -1;\n   471\t  }\n   472\t\n   473\t  // Get camera intrinsics and build intrinsic matrix for 3D calculation\n   474\t  auto module_params = m_pSDK->GetModuleParams();\n   475\t  auto param = module_params._left_camera[RESOLUTION::RES_1280X800];\n   476\t\n   477\t  // Debug: print raw parameter values\n   478\t  std::cout << \"\\nDEBUG: Raw camera parameters:\" << std::endl;\n   479\t  std::cout << \"  K[0]=\" << param._K[0] << \", K[4]=\" << param._K[4] << std::endl;\n   480\t  std::cout << \"  K[2]=\" << param._K[2] << \", K[5]=\" << param._K[5] << std::endl;\n   481\t  cv_in_left = cv::Mat::eye(3, 3, CV_64F);\n   482\t  cv_in_left.at<double>(0, 0) = param._K[0];  // fx\n   483\t  cv_in_left.at<double>(1, 1) = param._K[4];  // fy\n   484\t  cv_in_left.at<double>(0, 2) = param._K[2];  // cx\n   485\t  cv_in_left.at<double>(1, 2) = param._K[5];  // cy\n   486\t  cv_in_left_inv = cv_in_left.inv();\n   487\t\n   488\t  std::cout << \"\\nLeft Camera Intrinsics:\" << std::endl;\n   489\t  std::cout << \"  fx: \" << param._K[0] << \", fy: \" << param._K[4] << std::endl;\n   490\t  std::cout << \"  cx: \" << param._K[2] << \", cy: \" << param._K[5] << std::endl;\n   491\t  std::cout << \"  Resolution: 640x400\" << std::endl;\n   492\t\n   493\t  // Initialize YOLO Pose Detector with CUDA\n   494\t  std::cout << \"\\nModel: \" << model_path << std::endl;\n   495\t  YOLOPoseDetector pose_detector(model_path, 1280, 0.5f, 0.45f, true);  // true = 启用 CUDA\n   496\t  if (!pose_detector.Init()) {\n   497\t    std::cerr << \"Failed to initialize YOLO Pose Detector!\" << std::endl;\n   498\t    delete m_pSDK;\n   499\t    return -1;\n   500\t  }\n   501\t\n   502\t  // Queue for image stream\n   503\t  std::queue<cv::Mat> image_queue;\n   504\t  std::queue<cv::Mat> depth_queue;\n   505\t  std::mutex mutex_image;\n   506\t  std::mutex mutex_depth;\n   507\t\n   508\t  int img_count = 0;\n   509\t  int pose_count = 0;\n   510\t  int depth_count = 0;\n   511\t  int dropped_images = 0;\n   512\t  int dropped_depth = 0;\n   513\t  double last_img_time = -1.0;\n   514\t\n   515\t  // Initialize DepthRegion for mouse interaction\n   516\t  DepthRegion depth_region(3);\n   517\t  auto depth_info = [](const cv::Mat &depth, const cv::Point &point,\n   518\t                       const std::uint32_t &n, double X, double Y, double Z) {\n   519\t    std::ostringstream os;\n   520\t    os << \"depth pos(\" << n << \"): [\" << point.y << \", \" << point.x << \"]\"\n",
+      "exit_code": 0,
+      "status": "completed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_9",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc 'rg -n \"trunk|thigh|shank|angle|向量|夹角|躯干|大腿|小腿|hip|knee|ankle|shoulder\" get_pose_indemind_left.cpp'",
+      "aggregated_output": "70:  cv::Vec3d last_angles{0.0, 0.0, 0.0};\n75:    last_angles = cv::Vec3d(0.0, 0.0, 0.0);\n79:  void Update(const cv::Vec3d &angles_rad) {\n81:      last_angles = angles_rad;\n86:      double delta = angles_rad[i] - last_angles[i];\n90:      last_angles[i] = angles_rad[i];\n236:  cv::Point3d hip_mid(0.5 * (lh.x + rh.x),\n242:  cv::Vec3d trunk(sh_mid.x - hip_mid.x, sh_mid.y - hip_mid.y, sh_mid.z - hip_mid.z);\n251:    cv::Vec3d thigh(lk.x - lh.x, lk.y - lh.y, lk.z - lh.z);\n252:    cv::Vec3d shank(la.x - lk.x, la.y - lk.y, la.z - lk.z);\n254:        AngleDeg(trunk, thigh, metrics.left_tt) &&\n255:        AngleDeg(thigh, shank, metrics.left_ts);\n259:    cv::Vec3d thigh(rk.x - rh.x, rk.y - rh.y, rk.z - rh.z);\n260:    cv::Vec3d shank(ra.x - rk.x, ra.y - rk.y, ra.z - rk.z);\n262:        AngleDeg(trunk, thigh, metrics.right_tt) &&\n263:        AngleDeg(thigh, shank, metrics.right_ts);\n388:  cv::Point3d shoulders = ls_ok && rs_ok\n393:  // y_body: hip_mid -> shoulder_mid\n394:  // x_body: right_hip -> left_hip (left minus right)\n396:  cv::Vec3d y_raw(shoulders.x - pelvis.x, shoulders.y - pelvis.y, shoulders.z - pelvis.z);\n591:  std::cout << \"  l       : Toggle hip coords recording (Start/Stop)\" << std::endl;\n737:      // Calculate 3D keypoints (camera + trampoline coordinates) and hip info\n738:      std::vector<DepthRegion::HipInfo> hip_data_list;\n816:            DepthRegion::HipInfo hip_info;\n817:            hip_info.person_id = static_cast<int>(p) + 1;\n818:            hip_info.camera_pos = pelvis_cam;\n819:            hip_info.has_new_frame = bed_ready;\n820:            if (hip_info.has_new_frame) {\n821:              hip_info.new_frame_pos = info.pelvis_bed;\n823:            hip_data_list.push_back(hip_info);\n891:      // Update hip data in region window\n893:      depth_region.UpdateHipData(hip_data_list);\n900:      if (recording_data && !hip_data_list.empty()) {\n905:        for (const auto& hip : hip_data_list) {\n908:                   << hip.person_id << \",\"\n910:                   << hip.camera_pos.x << \",\"\n911:                   << hip.camera_pos.y << \",\"\n912:                   << hip.camera_pos.z;\n914:          if (hip.has_new_frame) {\n916:                     << hip.new_frame_pos.x << \",\"\n917:                     << hip.new_frame_pos.y << \",\"\n918:                     << hip.new_frame_pos.z;\n931:      // Draw depth region rectangle on YOLO Pose window\n990:        cv::Point3d hip_mid = lh_ok && rh_ok ? cv::Point3d(0.5 * (lh.x + rh.x),\n994:        cv::Point3d shoulder_mid = ls_ok && rs_ok ? cv::Point3d(0.5 * (ls.x + rs.x),\n1001:          cv::Point3d delta = shoulder_mid - hip_mid;\n1012:          double hip_width = std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);\n1013:          torso_width = torso_width > 1.0 ? 0.5 * (torso_width + hip_width) : hip_width;\n1103:        cv::Vec3d angles_deg = tracked_body_frame.euler_rad * (180.0 / M_PI);\n1117:        std::ostringstream angle_ss;\n1118:        angle_ss << \"Angles deg (x,y,z): [\" << std::fixed << std::setprecision(1)\n1119:                 << angles_deg[0] << \", \" << angles_deg[1] << \", \" << angles_deg[2] << \"]\";\n1120:        cv::putText(metrics_panel, angle_ss.str(), cv::Point(10, metrics_y),\n1151:      auto format_angle = [](bool valid, double value) {\n1163:              << format_angle(posture_metrics.left_valid, posture_metrics.left_tt)\n1165:              << format_angle(posture_metrics.left_valid, posture_metrics.left_ts);\n1172:               << format_angle(posture_metrics.right_valid, posture_metrics.right_tt)\n1174:               << format_angle(posture_metrics.right_valid, posture_metrics.right_ts);\n1181:             << format_angle(posture_metrics.avg_valid, posture_metrics.avg_tt)\n1183:             << format_angle(posture_metrics.avg_valid, posture_metrics.avg_ts);\n1271:        filename << \"hip_coords_\" << std::put_time(std::localtime(&now_time), \"%Y%m%d_%H%M%S\") << \".csv\";\n",
+      "exit_code": 0,
+      "status": "completed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_12",
+      "type": "reasoning",
+      "text": "**Confirming keypoints and vectors**"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_13",
+      "type": "agent_message",
+      "text": "已定位到核心逻辑在 `ComputePostureMetrics` 和 `AngleDeg` 两个函数。我再抓一次精确片段（含行号）用于逐条结论映射，随后按 8 段契约输出。"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "id": "item_14",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"nl -ba get_pose_indemind_left.cpp | sed -n '181,264p'\"",
+      "aggregated_output": "",
+      "exit_code": null,
+      "status": "in_progress"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "id": "item_15",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"nl -ba get_pose_indemind_left.cpp | sed -n '264,295p'\"",
+      "aggregated_output": "",
+      "exit_code": null,
+      "status": "in_progress"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_14",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"nl -ba get_pose_indemind_left.cpp | sed -n '181,264p'\"",
+      "aggregated_output": "   181\tstatic bool GetKpCam(const PoseResult &pose,\n   182\t                     const Pose3DInfo &info,\n   183\t                     int idx,\n   184\t                     float min_conf,\n   185\t                     cv::Point3d &out) {\n   186\t  if (idx < 0 || idx >= static_cast<int>(info.kp_cam.size())) {\n   187\t    return false;\n   188\t  }\n   189\t  if (!info.kp_valid[idx]) {\n   190\t    return false;\n   191\t  }\n   192\t  if (pose.keypoints[idx].confidence < min_conf) {\n   193\t    return false;\n   194\t  }\n   195\t  out = info.kp_cam[idx];\n   196\t  return true;\n   197\t}\n   198\t\n   199\tstatic bool AngleDeg(const cv::Vec3d &a, const cv::Vec3d &b, double &out_deg) {\n   200\t  double na = std::sqrt(a.dot(a));\n   201\t  double nb = std::sqrt(b.dot(b));\n   202\t  if (na < 1e-6 || nb < 1e-6) {\n   203\t    return false;\n   204\t  }\n   205\t  double cosv = a.dot(b) / (na * nb);\n   206\t  cosv = std::max(-1.0, std::min(1.0, cosv));\n   207\t  out_deg = std::acos(cosv) * (180.0 / M_PI);\n   208\t  return true;\n   209\t}\n   210\t\n   211\tstatic std::string ClassifyPosture(double tt_deg, double ts_deg) {\n   212\t  if (tt_deg <= 135.0) {\n   213\t    if (ts_deg <= 135.0) {\n   214\t      return \"Tuck\";\n   215\t    }\n   216\t    return \"Pike\";\n   217\t  }\n   218\t  return \"Straight\";\n   219\t}\n   220\t\n   221\tstatic PostureMetrics ComputePostureMetrics(const PoseResult &pose,\n   222\t                                            const Pose3DInfo &info) {\n   223\t  PostureMetrics metrics;\n   224\t\n   225\t  const float min_conf = 0.3f;\n   226\t  cv::Point3d lh, rh, ls, rs;\n   227\t  bool lh_ok = GetKpCam(pose, info, LEFT_HIP, min_conf, lh);\n   228\t  bool rh_ok = GetKpCam(pose, info, RIGHT_HIP, min_conf, rh);\n   229\t  bool ls_ok = GetKpCam(pose, info, LEFT_SHOULDER, min_conf, ls);\n   230\t  bool rs_ok = GetKpCam(pose, info, RIGHT_SHOULDER, min_conf, rs);\n   231\t\n   232\t  if (!(lh_ok && rh_ok && ls_ok && rs_ok)) {\n   233\t    return metrics;\n   234\t  }\n   235\t\n   236\t  cv::Point3d hip_mid(0.5 * (lh.x + rh.x),\n   237\t                      0.5 * (lh.y + rh.y),\n   238\t                      0.5 * (lh.z + rh.z));\n   239\t  cv::Point3d sh_mid(0.5 * (ls.x + rs.x),\n   240\t                     0.5 * (ls.y + rs.y),\n   241\t                     0.5 * (ls.z + rs.z));\n   242\t  cv::Vec3d trunk(sh_mid.x - hip_mid.x, sh_mid.y - hip_mid.y, sh_mid.z - hip_mid.z);\n   243\t\n   244\t  cv::Point3d lk, la, rk, ra;\n   245\t  bool lk_ok = GetKpCam(pose, info, LEFT_KNEE, min_conf, lk);\n   246\t  bool la_ok = GetKpCam(pose, info, LEFT_ANKLE, min_conf, la);\n   247\t  bool rk_ok = GetKpCam(pose, info, RIGHT_KNEE, min_conf, rk);\n   248\t  bool ra_ok = GetKpCam(pose, info, RIGHT_ANKLE, min_conf, ra);\n   249\t\n   250\t  if (lh_ok && lk_ok && la_ok) {\n   251\t    cv::Vec3d thigh(lk.x - lh.x, lk.y - lh.y, lk.z - lh.z);\n   252\t    cv::Vec3d shank(la.x - lk.x, la.y - lk.y, la.z - lk.z);\n   253\t    metrics.left_valid =\n   254\t        AngleDeg(trunk, thigh, metrics.left_tt) &&\n   255\t        AngleDeg(thigh, shank, metrics.left_ts);\n   256\t  }\n   257\t\n   258\t  if (rh_ok && rk_ok && ra_ok) {\n   259\t    cv::Vec3d thigh(rk.x - rh.x, rk.y - rh.y, rk.z - rh.z);\n   260\t    cv::Vec3d shank(ra.x - rk.x, ra.y - rk.y, ra.z - rk.z);\n   261\t    metrics.right_valid =\n   262\t        AngleDeg(trunk, thigh, metrics.right_tt) &&\n   263\t        AngleDeg(thigh, shank, metrics.right_ts);\n   264\t  }\n",
+      "exit_code": 0,
+      "status": "completed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_15",
+      "type": "command_execution",
+      "command": "/usr/bin/zsh -lc \"nl -ba get_pose_indemind_left.cpp | sed -n '264,295p'\"",
+      "aggregated_output": "   264\t  }\n   265\t\n   266\t  if (metrics.left_valid && metrics.right_valid) {\n   267\t    metrics.avg_tt = 0.5 * (metrics.left_tt + metrics.right_tt);\n   268\t    metrics.avg_ts = 0.5 * (metrics.left_ts + metrics.right_ts);\n   269\t    metrics.avg_valid = true;\n   270\t  } else if (metrics.left_valid) {\n   271\t    metrics.avg_tt = metrics.left_tt;\n   272\t    metrics.avg_ts = metrics.left_ts;\n   273\t    metrics.avg_valid = true;\n   274\t  } else if (metrics.right_valid) {\n   275\t    metrics.avg_tt = metrics.right_tt;\n   276\t    metrics.avg_ts = metrics.right_ts;\n   277\t    metrics.avg_valid = true;\n   278\t  }\n   279\t\n   280\t  if (metrics.left_valid && metrics.right_valid) {\n   281\t    const std::string left_label = ClassifyPosture(metrics.left_tt, metrics.left_ts);\n   282\t    const std::string right_label = ClassifyPosture(metrics.right_tt, metrics.right_ts);\n   283\t    if (left_label == right_label) {\n   284\t      metrics.label = left_label;\n   285\t    }\n   286\t  } else if (metrics.left_valid) {\n   287\t    metrics.label = ClassifyPosture(metrics.left_tt, metrics.left_ts);\n   288\t  } else if (metrics.right_valid) {\n   289\t    metrics.label = ClassifyPosture(metrics.right_tt, metrics.right_ts);\n   290\t  }\n   291\t\n   292\t  return metrics;\n   293\t}\n   294\t\n   295\tstatic void DrawBodyFrameBox(cv::Mat &image,\n",
+      "exit_code": 0,
+      "status": "completed"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_16",
+      "type": "reasoning",
+      "text": "**Outlining detailed final report**"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_17",
+      "type": "agent_message",
+      "text": "1. Step Identification\n- `task_id`: `pose_vector_angle_left_explain`\n- `run_id`: `pose_vector_angle_left_explain_20260212T074112Z_6kxkba6`\n- `step_id`: `S1`\n- `step_title`: Analyze vectors and angle computation in `get_pose_indemind_left.cpp`\n\n2. Summary of Work\n- 关键点读取入口是 `GetKpCam(...)`，要求索引合法、`kp_valid[idx]` 为真、且 `confidence >= 0.3`（`min_conf`）才算可用，见 `get_pose_indemind_left.cpp:181`、`get_pose_indemind_left.cpp:189`、`get_pose_indemind_left.cpp:192`、`get_pose_indemind_left.cpp:225`。\n- `trunk`（躯干向量）使用 `LEFT_HIP/RIGHT_HIP/LEFT_SHOULDER/RIGHT_SHOULDER`：先算 `hip_mid` 与 `sh_mid`，再做 `trunk = sh_mid - hip_mid`，方向是 `hip_mid -> sh_mid`，见 `get_pose_indemind_left.cpp:227`、`get_pose_indemind_left.cpp:228`、`get_pose_indemind_left.cpp:229`、`get_pose_indemind_left.cpp:230`、`get_pose_indemind_left.cpp:236`、`get_pose_indemind_left.cpp:239`、`get_pose_indemind_left.cpp:242`。\n- 左侧 `thigh`（大腿向量）是 `lk - lh`，方向 `LEFT_HIP -> LEFT_KNEE`；左侧 `shank`（小腿向量）是 `la - lk`，方向 `LEFT_KNEE -> LEFT_ANKLE`，见 `get_pose_indemind_left.cpp:245`、`get_pose_indemind_left.cpp:246`、`get_pose_indemind_left.cpp:251`、`get_pose_indemind_left.cpp:252`。\n- 右侧 `thigh` 是 `rk - rh`，方向 `RIGHT_HIP -> RIGHT_KNEE`；右侧 `shank` 是 `ra - rk`，方向 `RIGHT_KNEE -> RIGHT_ANKLE`，见 `get_pose_indemind_left.cpp:247`、`get_pose_indemind_left.cpp:248`、`get_pose_indemind_left.cpp:259`、`get_pose_indemind_left.cpp:260`。\n- 角度函数 `AngleDeg(a,b,out_deg)` 的实现是：`|a|`、`|b|` 求范数；`cosv = dot(a,b)/(|a||b|)`；`cosv` 截断到 `[-1,1]`；`out_deg = acos(cosv)*180/pi`，见 `get_pose_indemind_left.cpp:199`、`get_pose_indemind_left.cpp:200`、`get_pose_indemind_left.cpp:201`、`get_pose_indemind_left.cpp:205`、`get_pose_indemind_left.cpp:206`、`get_pose_indemind_left.cpp:207`。\n- 角度映射关系：`left_tt = AngleDeg(trunk, thigh)`（躯干-大腿夹角），`left_ts = AngleDeg(thigh, shank)`（大腿-小腿夹角），见 `get_pose_indemind_left.cpp:254`、`get_pose_indemind_left.cpp:255`；右侧同理 `right_tt/right_ts` 见 `get_pose_indemind_left.cpp:262`、`get_pose_indemind_left.cpp:263`。\n- 若左右都有效会做均值：`avg_tt/avg_ts`，见 `get_pose_indemind_left.cpp:266`、`get_pose_indemind_left.cpp:267`、`get_pose_indemind_left.cpp:268`。\n\n3. Files Changed\n- 未修改任何文件（read-only 分析）。\n\n4. Commands Executed\n- `pwd && rg --files | rg 'get_pose_indemind_left.cpp$'`\n- `git status --short`\n- `rg -n \"trunk|thigh|shank|angle|向量|夹角|躯干|大腿|小腿|hip|knee|ankle|shoulder\" get_pose_indemind_left.cpp`\n- `nl -ba get_pose_indemind_left.cpp | sed -n '1,260p'`\n- `nl -ba get_pose_indemind_left.cpp | sed -n '261,520p'`\n- `nl -ba get_pose_indemind_left.cpp | sed -n '181,264p'`\n- `nl -ba get_pose_indemind_left.cpp | sed -n '264,295p'`\n\n5. Verification Results\n- 验收项1（明确 `trunk/thigh/shank` 关键点与方向）：PASS（见上文向量定义与 `get_pose_indemind_left.cpp:236`、`get_pose_indemind_left.cpp:242`、`get_pose_indemind_left.cpp:251`、`get_pose_indemind_left.cpp:252`、`get_pose_indemind_left.cpp:259`、`get_pose_indemind_left.cpp:260`）。\n- 验收项2（明确角度计算方法）：PASS（`AngleDeg` 公式与实现已映射到 `get_pose_indemind_left.cpp:199`~`get_pose_indemind_left.cpp:208`，以及调用点 `get_pose_indemind_left.cpp:254`、`get_pose_indemind_left.cpp:255`、`get_pose_indemind_left.cpp:262`、`get_pose_indemind_left.cpp:263`）。\n- 验收项3（每个结论附代码行号）：PASS（各结论均含 `get_pose_indemind_left.cpp` 单点行号引用）。\n- 验收项4（不得修改仓库文件）：PASS（本步未执行编辑命令，`Files Changed` 为无）。\n\n6. Logs / Artifacts\n- 本步未生成新构建或测试产物。\n- 检索日志来自上述命令输出；关联运行目录：`.artifacts/agent_runs/pose_vector_angle_left_explain_20260212T074112Z_6kxkba6/`（未写入新内容）。\n\n7. Risks & Limitations\n- 结论基于当前工作区中的 `get_pose_indemind_left.cpp` 快照；该仓库本身存在已有未提交改动（由 `git status --short` 可见），若文件后续变更，行号需重新对齐。\n- 本步只分析了向量与角度计算实现，不涉及运行时数据正确性验证（无实测输入/输出对照）。\n\n8. Reproduction Guide\n1. 在仓库根目录执行：`nl -ba get_pose_indemind_left.cpp | sed -n '181,295p'`，核对 `GetKpCam`、`AngleDeg`、`ComputePostureMetrics`。\n2. 执行：`rg -n \"trunk|thigh|shank|AngleDeg|left_tt|left_ts|right_tt|right_ts\" get_pose_indemind_left.cpp`，快速定位向量与角度调用点。\n3. 对照本报告中的行号逐条复核向量方向与夹角映射关系。"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "usage": {
+      "input_tokens": 75246,
+      "cached_input_tokens": 55168,
+      "output_tokens": 4264
+    }
+  }
+]

@@ -1,0 +1,91 @@
+PARAMS
+action: create
+backend: codex
+run_id: stability_opt_sync_ema_hysteresis_20260212T093603Z_y9ihnmb
+step_id: S1
+round: 0
+thread_id: null
+
+PROMPT
+{
+  "task_kind": "step",
+  "task_id": "stability_opt_sync_ema_hysteresis",
+  "run_id": "stability_opt_sync_ema_hysteresis_20260212T093603Z_y9ihnmb",
+  "step_id": "S1",
+  "step_title": "Implement depth sync, body-box EMA stabilization, and posture hysteresis classifier",
+  "step_description": "Implement three stability optimizations in the YOLO_rec codebase: (1) use latest-frame strategy plus timestamp-based synchronization for selecting depth frame for each RGB frame, (2) add EMA stabilizers for body box center/orientation/size used in rendering, and (3) replace hard-threshold posture classification with a hysteresis state classifier for Pike/Tuck/Straight. After implementation, create docs/20260212稳定性优化.md with detailed design rationale, completion status, deliverables, run & acceptance procedure, risks/limitations, and future roadmap. Keep changes minimal, coherent, and buildable.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "RGB-depth pairing uses timestamp-aware selection of nearest depth frame for the processed RGB frame and avoids stale queue-front behavior",
+    "Body box rendering path applies temporal smoothing (EMA) for center, orientation, and size with sensible reset conditions",
+    "Posture classification uses hysteresis/stateful logic for Pike/Tuck/Straight and is integrated into displayed posture result",
+    "docs/20260212稳定性优化.md is created and includes all requested sections with concrete content",
+    "Project builds for target yolo_pose_indemind_left or provide explicit reason with command output"
+  ],
+  "context": {
+    "repo_overview": "C++ OpenCV/SDK-based pose app in get_pose_indemind_left.cpp with depth callbacks and posture metrics.",
+    "run_dir": ".artifacts/agent_runs/stability_opt_sync_ema_hysteresis_20260212T093603Z_y9ihnmb/",
+    "related_files": [
+      "get_pose_indemind_left.cpp",
+      "app/depth_region.h",
+      "app/depth_utils.cpp",
+      "docs/"
+    ],
+    "constraints": [
+      "Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step",
+      "Respect any pre-existing workspace modifications; do not revert unrelated user changes",
+      "Prefer small, readable helper structs/functions over large invasive refactor"
+    ]
+  },
+  "expected_outputs": [
+    "Code changes implementing sync+EMA+hysteresis",
+    "New file docs/20260212稳定性优化.md",
+    "Build/verification command outputs"
+  ],
+  "allowed_actions": [
+    "edit repo files",
+    "run build/test commands",
+    "write/update docs"
+  ]
+}
+
+REQUEST_JSON
+{
+  "task_kind": "step",
+  "task_id": "stability_opt_sync_ema_hysteresis",
+  "run_id": "stability_opt_sync_ema_hysteresis_20260212T093603Z_y9ihnmb",
+  "step_id": "S1",
+  "step_title": "Implement depth sync, body-box EMA stabilization, and posture hysteresis classifier",
+  "step_description": "Implement three stability optimizations in the YOLO_rec codebase: (1) use latest-frame strategy plus timestamp-based synchronization for selecting depth frame for each RGB frame, (2) add EMA stabilizers for body box center/orientation/size used in rendering, and (3) replace hard-threshold posture classification with a hysteresis state classifier for Pike/Tuck/Straight. After implementation, create docs/20260212稳定性优化.md with detailed design rationale, completion status, deliverables, run & acceptance procedure, risks/limitations, and future roadmap. Keep changes minimal, coherent, and buildable.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "RGB-depth pairing uses timestamp-aware selection of nearest depth frame for the processed RGB frame and avoids stale queue-front behavior",
+    "Body box rendering path applies temporal smoothing (EMA) for center, orientation, and size with sensible reset conditions",
+    "Posture classification uses hysteresis/stateful logic for Pike/Tuck/Straight and is integrated into displayed posture result",
+    "docs/20260212稳定性优化.md is created and includes all requested sections with concrete content",
+    "Project builds for target yolo_pose_indemind_left or provide explicit reason with command output"
+  ],
+  "context": {
+    "repo_overview": "C++ OpenCV/SDK-based pose app in get_pose_indemind_left.cpp with depth callbacks and posture metrics.",
+    "run_dir": ".artifacts/agent_runs/stability_opt_sync_ema_hysteresis_20260212T093603Z_y9ihnmb/",
+    "related_files": [
+      "get_pose_indemind_left.cpp",
+      "app/depth_region.h",
+      "app/depth_utils.cpp",
+      "docs/"
+    ],
+    "constraints": [
+      "Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step",
+      "Respect any pre-existing workspace modifications; do not revert unrelated user changes",
+      "Prefer small, readable helper structs/functions over large invasive refactor"
+    ]
+  },
+  "expected_outputs": [
+    "Code changes implementing sync+EMA+hysteresis",
+    "New file docs/20260212稳定性优化.md",
+    "Build/verification command outputs"
+  ],
+  "allowed_actions": [
+    "edit repo files",
+    "run build/test commands",
+    "write/update docs"
+  ]
+}
