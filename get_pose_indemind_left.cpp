@@ -1171,13 +1171,15 @@ int main(int argc, char **argv) {
       }
 
       bool body_box_updated = false;
+      bool posture_anchor_valid = false;
+      cv::Point posture_anchor_2d(0, 0);
 
       // Draw body axes for tracked person
       if (tracked_body_frame.valid && tracked_pose_index >= 0 &&
           tracked_pose_index < static_cast<int>(pose_3d_infos.size()) &&
           pose_3d_infos[tracked_pose_index].pelvis_valid) {
-        const double axis_length = 260.0;
-        const int axis_thickness = 1;
+        const double axis_length = 520.0; // 人体坐标系轴长度
+        const int axis_thickness = 3; // 人体坐标系轴粗细
         const cv::Point3d &pelvis_cam = pose_3d_infos[tracked_pose_index].pelvis_cam;
 
         cv::Point3d x_end(pelvis_cam.x + tracked_body_frame.R_body_cam.at<double>(0, 0) * axis_length,
@@ -1192,6 +1194,8 @@ int main(int argc, char **argv) {
 
         cv::Point origin_2d, x_2d, y_2d, z_2d;
         if (ProjectPoint(pelvis_cam, cv_in_left, origin_2d)) {
+          posture_anchor_valid = true;
+          posture_anchor_2d = origin_2d;
           if (ProjectPoint(x_end, cv_in_left, x_2d)) {
             cv::arrowedLine(display, origin_2d, x_2d, cv::Scalar(0, 0, 255), axis_thickness, cv::LINE_AA, 0, 0.2);
             cv::putText(display, "Xb", x_2d + cv::Point(6, 6),
@@ -1325,11 +1329,31 @@ int main(int argc, char **argv) {
                     cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(200, 200, 200), 1);
       }
 
-      panel_y += line_height;
-      std::ostringstream posture_ss;
-      posture_ss << "Posture: " << posture_metrics.label;
-      cv::putText(display, posture_ss.str(), cv::Point(panel_x, panel_y),
-                  cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(0, 255, 255), 1);
+      std::string posture_text = "Posture: " + posture_metrics.label;
+      if (posture_anchor_valid) {
+        const double posture_font_scale = 1.0;
+        const int posture_thickness = 3;
+        int baseline = 0;
+        cv::Size text_size = cv::getTextSize(
+            posture_text, cv::FONT_HERSHEY_SIMPLEX, posture_font_scale, posture_thickness, &baseline);
+
+        cv::Point text_org = posture_anchor_2d + cv::Point(24, -24);
+        text_org.x = std::max(8, std::min(text_org.x, display.cols - text_size.width - 8));
+        text_org.y = std::max(text_size.height + 8, std::min(text_org.y, display.rows - 8));
+
+        cv::Rect bg_rect(text_org.x - 6,
+                         text_org.y - text_size.height - 6,
+                         text_size.width + 12,
+                         text_size.height + baseline + 12);
+        cv::rectangle(display, bg_rect, cv::Scalar(0, 0, 0), cv::FILLED);
+        cv::putText(display, posture_text, text_org,
+                    cv::FONT_HERSHEY_SIMPLEX, posture_font_scale,
+                    cv::Scalar(0, 255, 255), posture_thickness, cv::LINE_AA);
+      } else {
+        panel_y += line_height;
+        cv::putText(display, posture_text, cv::Point(panel_x, panel_y),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 255), 2);
+      }
 
       // Body frame metrics window
       cv::Mat metrics_panel(950, 650, CV_8UC3, cv::Scalar(245, 245, 245));
