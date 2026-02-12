@@ -1,0 +1,14 @@
+{
+  "run_id": "cpp_project_arch_doc_20260212T024116Z_87q15q5",
+  "created_at": "2026-02-12T02:41:39.163417+00:00",
+  "repo": {
+    "path": "/home/chris4/workspace/from_vm/YOLO_rec",
+    "branch": "main",
+    "commit": "60a946db2a01160c2b300de96321540f28f72c88",
+    "commit_short": "60a946d",
+    "dirty": true
+  },
+  "policy": {
+    "max_rework_rounds_per_step": 6
+  }
+}

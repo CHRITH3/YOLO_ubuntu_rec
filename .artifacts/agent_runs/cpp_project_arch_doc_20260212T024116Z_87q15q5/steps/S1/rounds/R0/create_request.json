@@ -1,0 +1,52 @@
+{
+  "task_kind": "step",
+  "task_id": "cpp_project_arch_doc",
+  "run_id": "cpp_project_arch_doc_20260212T024116Z_87q15q5",
+  "step_id": "S1",
+  "step_title": "Analyze major C++ source/header architecture and author beginner-friendly project reconstruction guide",
+  "step_description": "Inspect the repository's major .cpp/.h files and CMake target wiring to build a clear architecture map for a beginner. Create one markdown document under docs that explains each major file's responsibilities, inter-file call/dependency relationships, critical C++ syntax/patterns used in this codebase, and an end-to-end execution/data flow so the reader can reproduce the project implementation. Include concrete file references and a practical reconstruction roadmap with build/run/verification steps tailored to this repository.\n\nOutput Contract (MUST follow exactly, missing any section => REWORK):\n1. Step Identification\n2. Summary of Work\n3. Files Changed\n4. Commands Executed\n5. Verification Results\n6. Logs / Artifacts\n7. Risks & Limitations\n8. Reproduction Guide",
+  "acceptance_criteria": [
+    "A markdown file exists at docs/project_cpp_architecture_guide.md and is written for a C++ beginner in Chinese with structured sections.",
+    "The document covers major .cpp/.h files in root and app/ (at minimum: get_pose_indemind_left.cpp, yolo_pose_detector.cpp/.h, pose_utils.cpp/.h, app/runtime_state.*, app/depth_utils.*, app/depth_region.*, app/camera_intrinsics.*, app/perf_stats.*, app/queue_utils.h) and explains each file's role.",
+    "The document includes explicit call/dependency relationships (who calls whom, shared data structures, lifecycle), key C++ syntax/pattern explanations from this project, and a step-by-step roadmap to reproduce the engineering implementation.",
+    "Verification evidence is provided: list inspected files/commands and confirm the new document path and readability checks."
+  ],
+  "context": {
+    "repo_overview": "YOLO pose + depth processing C++ project with a main pipeline in get_pose_indemind_left.cpp and supporting modules under app/.",
+    "run_dir": ".artifacts/agent_runs/cpp_project_arch_doc_20260212T024116Z_87q15q5/",
+    "related_files": [
+      "CMakeLists.txt",
+      "get_pose_indemind_left.cpp",
+      "yolo_pose_detector.cpp",
+      "yolo_pose_detector.h",
+      "pose_utils.cpp",
+      "pose_utils.h",
+      "app/runtime_state.cpp",
+      "app/runtime_state.h",
+      "app/depth_utils.cpp",
+      "app/depth_utils.h",
+      "app/depth_region.cpp",
+      "app/depth_region.h",
+      "app/camera_intrinsics.cpp",
+      "app/camera_intrinsics.h",
+      "app/perf_stats.cpp",
+      "app/perf_stats.h",
+      "app/queue_utils.h",
+      "include/imrsdk.h",
+      "include/types.h"
+    ],
+    "constraints": [
+      "Create or modify only files needed for this documentation task.",
+      "Do not modify unrelated files (e.g., skill files, shim sources, .artifacts/, tool metadata) unless explicitly required by this step"
+    ]
+  },
+  "expected_outputs": [
+    "docs/project_cpp_architecture_guide.md",
+    "A concise verification summary referencing inspected source files and commands"
+  ],
+  "allowed_actions": [
+    "edit repo files",
+    "run build/test commands",
+    "write/update docs"
+  ]
+}
