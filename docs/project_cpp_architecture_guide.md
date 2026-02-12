@@ -195,7 +195,7 @@ cmake --build build_agent -j
 ```bash
 sudo ./build_agent_out/yolo_pose_indemind_left
 # 或指定模型
-sudo ./build_agent_out/yolo_pose_indemind_left models/yolov8n-pose.onnx
+sudo ./build_agent_out/yolo_pose_indemind_left models/yolov8n-pose-640.onnx
 ```
 
 ### 8.4 功能验证清单

@@ -250,17 +250,19 @@ static PostureMetrics ComputePostureMetrics(const PoseResult &pose,
   if (lh_ok && lk_ok && la_ok) {
     cv::Vec3d thigh(lk.x - lh.x, lk.y - lh.y, lk.z - lh.z);
     cv::Vec3d shank(la.x - lk.x, la.y - lk.y, la.z - lk.z);
+    cv::Vec3d rev_thigh(-thigh[0], -thigh[1], -thigh[2]);
     metrics.left_valid =
         AngleDeg(trunk, thigh, metrics.left_tt) &&
-        AngleDeg(thigh, shank, metrics.left_ts);
+        AngleDeg(rev_thigh, shank, metrics.left_ts);
   }
 
   if (rh_ok && rk_ok && ra_ok) {
     cv::Vec3d thigh(rk.x - rh.x, rk.y - rh.y, rk.z - rh.z);
     cv::Vec3d shank(ra.x - rk.x, ra.y - rk.y, ra.z - rk.z);
+    cv::Vec3d rev_thigh(-thigh[0], -thigh[1], -thigh[2]);
     metrics.right_valid =
         AngleDeg(trunk, thigh, metrics.right_tt) &&
-        AngleDeg(thigh, shank, metrics.right_ts);
+        AngleDeg(rev_thigh, shank, metrics.right_ts);
   }
 
   if (metrics.left_valid && metrics.right_valid) {
@@ -446,7 +448,7 @@ int main(int argc, char **argv) {
   (void)argc;
 
   // Check model file
-  std::string model_path = "models/yolov8n-pose.onnx";
+  std::string model_path = "models/yolov8m-pose-1280.onnx";
   if (argc > 1) {
     model_path = argv[1];
   }
@@ -458,7 +460,7 @@ int main(int argc, char **argv) {
   auto m_pSDK = new CIMRSDK();
   MRCONFIG config = {0};
   config.bSlam = false;
-  config.imgResolution = IMG_640;
+  config.imgResolution = IMG_1280;
   config.imgFrequency = 50;
   config.imuFrequency = 0;  // Disabled for performance
 
@@ -472,7 +474,7 @@ int main(int argc, char **argv) {
 
   // Get camera intrinsics and build intrinsic matrix for 3D calculation
   auto module_params = m_pSDK->GetModuleParams();
-  auto param = module_params._left_camera[RESOLUTION::RES_640X400];
+  auto param = module_params._left_camera[RESOLUTION::RES_1280X800];
 
   // Debug: print raw parameter values
   std::cout << "\nDEBUG: Raw camera parameters:" << std::endl;
@@ -492,7 +494,7 @@ int main(int argc, char **argv) {
 
   // Initialize YOLO Pose Detector with CUDA
   std::cout << "\nModel: " << model_path << std::endl;
-  YOLOPoseDetector pose_detector(model_path, 640, 0.5f, 0.45f, true);  // true = 启用 CUDA
+  YOLOPoseDetector pose_detector(model_path, 1280, 0.5f, 0.45f, true);  // true = 启用 CUDA
   if (!pose_detector.Init()) {
     std::cerr << "Failed to initialize YOLO Pose Detector!" << std::endl;
     delete m_pSDK;
@@ -1403,7 +1405,7 @@ COMPILATION:
 EXECUTION:
   sudo ./build/yolo_pose_indemind_left [model_path]
 
-  Optional: Specify model path (default: models/yolov8n-pose.onnx)
+  Optional: Specify model path (default: models/yolov8n-pose-640.onnx)
   sudo ./build/yolo_pose_indemind_left models/yolov8s-pose.onnx
 
 FEATURES:
@@ -1504,7 +1506,7 @@ TROUBLESHOOTING:
   - "Failed to initialize detector":
     * Check ONNX Runtime installation
     * Verify model file exists
-    * Run: ls -lh models/yolov8n-pose.onnx
+    * Run: ls -lh models/yolov8n-pose-640.onnx
 
   - "Cannot initialize camera":
     * Check INDEMIND camera is connected
