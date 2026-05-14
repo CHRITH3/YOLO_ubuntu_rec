@@ -1,0 +1,215 @@
+{
+  "id": "2026-05-13-004742",
+  "generated_at": "2026-05-12T16:47:42.274150305Z",
+  "language": "zh",
+  "pages": [
+    {
+      "slug": "1-gai-lan",
+      "title": "概览",
+      "file": "1-gai-lan.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "2-kuai-su-kai-shi",
+      "title": "快速开始",
+      "file": "2-kuai-su-kai-shi.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "3-yun-xing-huan-jing-yu-yi-lai-jian-cha",
+      "title": "运行环境与依赖检查",
+      "file": "3-yun-xing-huan-jing-yu-yi-lai-jian-cha.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "4-mo-xing-wen-jian-xiang-ji-sdk-yu-mu-lu-yue-ding",
+      "title": "模型文件、相机 SDK 与目录约定",
+      "file": "4-mo-xing-wen-jian-xiang-ji-sdk-yu-mu-lu-yue-ding.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "5-bian-yi-yun-xing-yu-chang-jian-qi-dong-can-shu",
+      "title": "编译、运行与常见启动参数",
+      "file": "5-bian-yi-yun-xing-yu-chang-jian-qi-dong-can-shu.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "6-shi-shi-jie-mian-shu-biao-xuan-qu-yu-jian-pan-cao-zuo",
+      "title": "实时界面、鼠标选区与键盘操作",
+      "file": "6-shi-shi-jie-mian-shu-biao-xuan-qu-yu-jian-pan-cao-zuo.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "7-cong-zuo-mu-tu-xiang-dao-ren-ti-guan-jian-dian-de-zui-xiao-bi-huan",
+      "title": "从左目图像到人体关键点的最小闭环",
+      "file": "7-cong-zuo-mu-tu-xiang-dao-ren-ti-guan-jian-dian-de-zui-xiao-bi-huan.md",
+      "section": "入门指南",
+      "group": "上手验证",
+      "level": "Beginner"
+    },
+    {
+      "slug": "8-shen-du-tu-jie-ru-yu-3d-guan-jian-dian-yan-zheng",
+      "title": "深度图接入与 3D 关键点验证",
+      "file": "8-shen-du-tu-jie-ru-yu-3d-guan-jian-dian-yan-zheng.md",
+      "section": "入门指南",
+      "group": "上手验证",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "9-beng-chuang-roi-biao-ding-yu-luo-dian-ji-lu-liu-cheng",
+      "title": "蹦床 ROI 标定与落点记录流程",
+      "file": "9-beng-chuang-roi-biao-ding-yu-luo-dian-ji-lu-liu-cheng.md",
+      "section": "入门指南",
+      "group": "上手验证",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "10-zheng-ti-jia-gou-yu-duan-dao-duan-shu-ju-liu",
+      "title": "整体架构与端到端数据流",
+      "file": "10-zheng-ti-jia-gou-yu-duan-dao-duan-shu-ju-liu.md",
+      "section": "深入剖析",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "11-cmake-gou-jian-mu-biao-yu-di-san-fang-yi-lai-lian-jie",
+      "title": "CMake 构建目标与第三方依赖链接",
+      "file": "11-cmake-gou-jian-mu-biao-yu-di-san-fang-yi-lai-lian-jie.md",
+      "section": "深入剖析",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "12-yolov8-pose-onnx-tui-li-qi-she-ji",
+      "title": "YOLOv8-Pose ONNX 推理器设计",
+      "file": "12-yolov8-pose-onnx-tui-li-qi-she-ji.md",
+      "section": "深入剖析",
+      "group": "核心推理链路",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "13-tu-xiang-yu-chu-li-shu-chu-jie-xi-yu-fei-ji-da-zhi-yi-zhi",
+      "title": "图像预处理、输出解析与非极大值抑制",
+      "file": "13-tu-xiang-yu-chu-li-shu-chu-jie-xi-yu-fei-ji-da-zhi-yi-zhi.md",
+      "section": "深入剖析",
+      "group": "核心推理链路",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "14-coco-17-guan-jian-dian-shu-ju-jie-gou-yu-gu-jia-ke-shi-hua",
+      "title": "COCO 17 关键点数据结构与骨架可视化",
+      "file": "14-coco-17-guan-jian-dian-shu-ju-jie-gou-yu-gu-jia-ke-shi-hua.md",
+      "section": "深入剖析",
+      "group": "核心推理链路",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "15-indemind-sdk-hui-diao-mo-xing-yu-zui-xin-zheng-xiao-fei-ce-lue",
+      "title": "INDEMIND SDK 回调模型与最新帧消费策略",
+      "file": "15-indemind-sdk-hui-diao-mo-xing-yu-zui-xin-zheng-xiao-fei-ce-lue.md",
+      "section": "深入剖析",
+      "group": "相机、深度与三维重建",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "16-xiang-ji-nei-can-shen-du-cai-yang-yu-xiang-su-fan-tou-ying",
+      "title": "相机内参、深度采样与像素反投影",
+      "file": "16-xiang-ji-nei-can-shen-du-cai-yang-yu-xiang-su-fan-tou-ying.md",
+      "section": "深入剖析",
+      "group": "相机、深度与三维重建",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "17-wu-xiao-shen-du-guo-lu-yu-ju-bu-zhong-zhi-lu-bang-gu-ji",
+      "title": "无效深度过滤与局部中值鲁棒估计",
+      "file": "17-wu-xiao-shen-du-guo-lu-yu-ju-bu-zhong-zhi-lu-bang-gu-ji.md",
+      "section": "深入剖析",
+      "group": "相机、深度与三维重建",
+      "level": "Advanced"
+    },
+    {
+      "slug": "18-si-dian-roi-jiao-hu-yu-beng-chuang-ping-mian-cai-yang",
+      "title": "四点 ROI 交互与蹦床平面采样",
+      "file": "18-si-dian-roi-jiao-hu-yu-beng-chuang-ping-mian-cai-yang.md",
+      "section": "深入剖析",
+      "group": "蹦床坐标系与几何算法",
+      "level": "Advanced"
+    },
+    {
+      "slug": "19-ransac-yu-zui-xiao-er-cheng-ping-mian-ni-he",
+      "title": "RANSAC 与最小二乘平面拟合",
+      "file": "19-ransac-yu-zui-xiao-er-cheng-ping-mian-ni-he.md",
+      "section": "深入剖析",
+      "group": "蹦床坐标系与几何算法",
+      "level": "Advanced"
+    },
+    {
+      "slug": "20-chuang-mian-zuo-biao-xi-gou-jian-zuo-biao-bian-huan-yu-zhou-xiang-yue-ding",
+      "title": "床面坐标系构建、坐标变换与轴向约定",
+      "file": "20-chuang-mian-zuo-biao-xi-gou-jian-zuo-biao-bian-huan-yu-zhou-xiang-yue-ding.md",
+      "section": "深入剖析",
+      "group": "蹦床坐标系与几何算法",
+      "level": "Advanced"
+    },
+    {
+      "slug": "21-ren-ti-3d-zi-tai-zhi-biao-shen-ti-zuo-biao-xi-yu-xuan-zhuan-biao-shi",
+      "title": "人体 3D 姿态指标、身体坐标系与旋转表示",
+      "file": "21-ren-ti-3d-zi-tai-zhi-biao-shen-ti-zuo-biao-xi-yu-xuan-zhuan-biao-shi.md",
+      "section": "深入剖析",
+      "group": "姿态理解与业务逻辑",
+      "level": "Advanced"
+    },
+    {
+      "slug": "22-kuan-dian-gui-ji-gen-zong-ema-lu-bo-yu-diu-zheng-fu-wei",
+      "title": "髋点轨迹跟踪、EMA 滤波与丢帧复位",
+      "file": "22-kuan-dian-gui-ji-gen-zong-ema-lu-bo-yu-diu-zheng-fu-wei.md",
+      "section": "深入剖析",
+      "group": "姿态理解与业务逻辑",
+      "level": "Advanced"
+    },
+    {
+      "slug": "23-luo-dian-jian-ce-zhuang-tai-ji-yu-jia-quan-que-ren-suan-fa",
+      "title": "落点检测状态机与加权确认算法",
+      "file": "23-luo-dian-jian-ce-zhuang-tai-ji-yu-jia-quan-que-ren-suan-fa.md",
+      "section": "深入剖析",
+      "group": "姿态理解与业务逻辑",
+      "level": "Advanced"
+    },
+    {
+      "slug": "24-lu-zhi-hui-hua-csv-dao-chu-yu-yun-xing-shi-quan-ju-zhuang-tai",
+      "title": "录制会话、CSV 导出与运行时全局状态",
+      "file": "24-lu-zhi-hui-hua-csv-dao-chu-yu-yun-xing-shi-quan-ju-zhuang-tai.md",
+      "section": "深入剖析",
+      "group": "姿态理解与业务逻辑",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "25-xing-neng-tong-ji-dui-lie-xian-liu-yu-shi-shi-xing-you-hua",
+      "title": "性能统计、队列限流与实时性优化",
+      "file": "25-xing-neng-tong-ji-dui-lie-xian-liu-yu-shi-shi-xing-you-hua.md",
+      "section": "深入剖析",
+      "group": "工程化与维护",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "26-mo-kuai-zhi-ze-bian-jie-yu-zhong-gou-lu-xian",
+      "title": "模块职责边界与重构路线",
+      "file": "26-mo-kuai-zhi-ze-bian-jie-yu-zhong-gou-lu-xian.md",
+      "section": "深入剖析",
+      "group": "工程化与维护",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "27-diao-shi-tui-li-shen-du-zuo-biao-xi-yu-luo-dian-wu-chai",
+      "title": "调试推理、深度、坐标系与落点误差",
+      "file": "27-diao-shi-tui-li-shen-du-zuo-biao-xi-yu-luo-dian-wu-chai.md",
+      "section": "深入剖析",
+      "group": "工程化与维护",
+      "level": "Advanced"
+    }
+  ]
+}
