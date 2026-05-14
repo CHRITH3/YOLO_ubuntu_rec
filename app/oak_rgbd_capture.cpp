@@ -17,6 +17,8 @@
 namespace {
 
 constexpr std::size_t kPairBufferLimit = 90;
+constexpr unsigned int kOutputQueueSize = 120;
+constexpr bool kOutputQueueBlocking = true;
 constexpr int kRgbSensorWidth = 1920;
 constexpr int kRgbSensorHeight = 1200;
 
@@ -154,6 +156,34 @@ cv::Mat DepthToU16(const std::shared_ptr<dai::ImgFrame>& msg) {
     return frame.clone();
   }
   return cv::Mat();
+}
+
+dai::ImageFiltersConfig BuildHostFilterConfig(const OakRgbdConfig& cfg) {
+  dai::ImageFiltersConfig config;
+
+  if (!cfg.enable_post_processing) {
+    return config;
+  }
+
+  if (cfg.enable_speckle_filter) {
+    dai::SpeckleFilterParams speckle;
+    speckle.enable = true;
+    speckle.speckleRange = cfg.speckle_range;
+    speckle.differenceThreshold = cfg.speckle_diff;
+    config.insertFilter(speckle);
+  }
+
+  if (cfg.enable_spatial_filter) {
+    dai::SpatialFilterParams spatial;
+    spatial.enable = true;
+    spatial.alpha = cfg.spatial_alpha;
+    spatial.delta = cfg.spatial_delta;
+    spatial.holeFillingRadius = cfg.spatial_hole_radius;
+    spatial.numIterations = cfg.spatial_iterations;
+    config.insertFilter(spatial);
+  }
+
+  return config;
 }
 
 void PrintConnectedCameras(dai::Device& device) {
@@ -332,31 +362,19 @@ void OakRgbdCapture::CaptureLoop() {
     stereo->initialConfig->setConfidenceThreshold(cfg_.confidence);
     stereo->inputConfig.setBlocking(false);
 
-    if (cfg_.enable_post_processing) {
-      auto& pp = stereo->initialConfig->postProcessing;
-      pp.median = dai::StereoDepthConfig::MedianFilter::MEDIAN_OFF;
-      pp.speckleFilter.enable = cfg_.enable_speckle_filter;
-      pp.speckleFilter.speckleRange = cfg_.speckle_range;
-      pp.speckleFilter.differenceThreshold = cfg_.speckle_diff;
-      pp.spatialFilter.enable = cfg_.enable_spatial_filter;
-      pp.spatialFilter.alpha = cfg_.spatial_alpha;
-      pp.spatialFilter.delta = cfg_.spatial_delta;
-      pp.spatialFilter.holeFillingRadius = cfg_.spatial_hole_radius;
-      pp.spatialFilter.numIterations = cfg_.spatial_iterations;
-      pp.temporalFilter.enable = false;
-      using Filter = dai::StereoDepthConfig::PostProcessing::Filter;
-      pp.filteringOrder = {Filter::SPECKLE, Filter::SPATIAL, Filter::MEDIAN,
-                           Filter::NONE, Filter::NONE};
-    }
-
     left_out->link(stereo->left);
     right_out->link(stereo->right);
 
     // RVC2 path: align stereo depth to CAM_A RGB output through inputAlignTo.
     rgb_out->link(stereo->inputAlignTo);
 
-    auto rgb_queue = rgb_out->createOutputQueue();
-    auto depth_queue = stereo->depth.createOutputQueue();
+    auto filters = pipeline.create<dai::node::ImageFilters>();
+    filters->setRunOnHost(true);
+    *filters->initialConfig = BuildHostFilterConfig(cfg_);
+    stereo->depth.link(filters->input);
+
+    auto rgb_queue = rgb_out->createOutputQueue(kOutputQueueSize, kOutputQueueBlocking);
+    auto depth_queue = filters->output.createOutputQueue(kOutputQueueSize, kOutputQueueBlocking);
 
     std::cout << "\nOAK RGBD capture started" << std::endl;
     std::cout << "  FSYNC: CAM_B OUTPUT master, CAM_A/C INPUT" << std::endl;
@@ -366,7 +384,8 @@ void OakRgbdCapture::CaptureLoop() {
               << " @ " << cfg_.fps << " FPS" << std::endl;
     std::cout << "  Pair threshold: " << cfg_.pair_threshold_ms << " ms" << std::endl;
     std::cout << "  LR-check: enabled, depth aligned to CAM_A" << std::endl;
-    std::cout << "  Depth filters: speckle -> spatial, median off, temporal off" << std::endl;
+    std::cout << "  Depth source: StereoDepth raw aligned -> host ImageFilters" << std::endl;
+    std::cout << "  Depth filters: host speckle -> spatial, median off, temporal off" << std::endl;
 
     ReportStart(true, "");
 
