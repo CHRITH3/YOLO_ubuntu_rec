@@ -624,13 +624,13 @@ int main(int argc, char **argv) {
   oak_cfg.rgb_iso = 1200;
   oak_cfg.mono_iso = 400;
   oak_cfg.confidence = 180;
-  oak_cfg.subpixel = false;
+  oak_cfg.subpixel = true;
   oak_cfg.extended_disparity = false;
   oak_cfg.enable_post_processing = true;
-  oak_cfg.enable_speckle_filter = true;
+  oak_cfg.enable_speckle_filter = false;
   oak_cfg.speckle_range = 48;
   oak_cfg.speckle_diff = 2;
-  oak_cfg.enable_spatial_filter = true;
+  oak_cfg.enable_spatial_filter = false;
   oak_cfg.spatial_alpha = 0.50f;
   oak_cfg.spatial_delta = 3;
   oak_cfg.spatial_hole_radius = 2;
