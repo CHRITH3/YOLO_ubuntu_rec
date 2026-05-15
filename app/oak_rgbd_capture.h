@@ -7,6 +7,30 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
+
+enum class OakDepthFilterType {
+  kMedian,
+  kSpeckle,
+  kSpatial,
+};
+
+struct OakFilterConfig {
+  bool enable_post_processing = true;
+  int median_mode = 0;  // 0=off, 1=3x3, 2=5x5
+  bool enable_speckle_filter = true;
+  int speckle_range = 48;
+  int speckle_diff = 2;
+  bool enable_spatial_filter = true;
+  float spatial_alpha = 0.50f;
+  int spatial_delta = 3;
+  int spatial_hole_radius = 2;
+  int spatial_iterations = 1;
+  std::vector<OakDepthFilterType> filtering_order{
+      OakDepthFilterType::kSpeckle,
+      OakDepthFilterType::kSpatial,
+      OakDepthFilterType::kMedian};
+};
 
 struct OakRgbdConfig {
   int rgb_width = 640;
@@ -22,6 +46,7 @@ struct OakRgbdConfig {
   bool subpixel = false;
   bool extended_disparity = false;
   bool enable_post_processing = true;
+  int median_mode = 0;
   bool enable_speckle_filter = true;
   int speckle_range = 48;
   int speckle_diff = 2;
@@ -36,6 +61,7 @@ struct TimedRgbdFrame {
   double timestamp_sec = -1.0;
   double pair_dt_ms = 0.0;
   cv::Mat bgr;
+  cv::Mat raw_depth_mm;
   cv::Mat depth_mm;
 };
 
@@ -50,6 +76,7 @@ class OakRgbdCapture {
   bool Start();
   void Stop();
   bool TryGetLatest(TimedRgbdFrame& out);
+  void UpdateFilterConfig(const OakFilterConfig& config);
 
   cv::Mat GetCameraMatrix() const;
   cv::Mat GetCameraMatrixInv() const;
@@ -65,6 +92,7 @@ class OakRgbdCapture {
   void CaptureLoop();
   void ReportStart(bool ok, const std::string& error_message);
   void PublishFrame(const TimedRgbdFrame& frame);
+  OakFilterConfig InitialFilterConfig() const;
 
   OakRgbdConfig cfg_;
   std::atomic<bool> running_{false};
@@ -75,6 +103,10 @@ class OakRgbdCapture {
   bool has_new_frame_ = false;
   cv::Mat K_;
   cv::Mat K_inv_;
+
+  mutable std::mutex filter_mutex_;
+  OakFilterConfig pending_filter_config_;
+  bool has_pending_filter_config_ = false;
 
   std::atomic<int> image_count_{0};
   std::atomic<int> depth_count_{0};

@@ -51,6 +51,15 @@ void AppendAndTrim(std::deque<std::shared_ptr<dai::ImgFrame>>& buf,
   }
 }
 
+void AppendAndTrim(std::deque<std::shared_ptr<dai::ImgFrame>>& buf,
+                   const std::shared_ptr<dai::ImgFrame>& msg,
+                   std::size_t limit) {
+  buf.push_back(msg);
+  while (buf.size() > limit) {
+    buf.pop_front();
+  }
+}
+
 bool PopClosestPair(std::deque<std::shared_ptr<dai::ImgFrame>>& primary_buf,
                     std::deque<std::shared_ptr<dai::ImgFrame>>& secondary_buf,
                     double threshold_ms,
@@ -158,32 +167,67 @@ cv::Mat DepthToU16(const std::shared_ptr<dai::ImgFrame>& msg) {
   return cv::Mat();
 }
 
-dai::ImageFiltersConfig BuildHostFilterConfig(const OakRgbdConfig& cfg) {
+dai::ImageFiltersConfig BuildHostFilterConfig(const OakFilterConfig& cfg) {
   dai::ImageFiltersConfig config;
 
   if (!cfg.enable_post_processing) {
     return config;
   }
 
-  if (cfg.enable_speckle_filter) {
-    dai::SpeckleFilterParams speckle;
-    speckle.enable = true;
-    speckle.speckleRange = cfg.speckle_range;
-    speckle.differenceThreshold = cfg.speckle_diff;
-    config.insertFilter(speckle);
-  }
-
-  if (cfg.enable_spatial_filter) {
-    dai::SpatialFilterParams spatial;
-    spatial.enable = true;
-    spatial.alpha = cfg.spatial_alpha;
-    spatial.delta = cfg.spatial_delta;
-    spatial.holeFillingRadius = cfg.spatial_hole_radius;
-    spatial.numIterations = cfg.spatial_iterations;
-    config.insertFilter(spatial);
+  for (const auto filter : cfg.filtering_order) {
+    if (filter == OakDepthFilterType::kMedian) {
+      if (cfg.median_mode == 1) {
+        config.insertFilter(dai::MedianFilterParams::KERNEL_3x3);
+      } else if (cfg.median_mode == 2) {
+        config.insertFilter(dai::MedianFilterParams::KERNEL_5x5);
+      }
+    } else if (filter == OakDepthFilterType::kSpeckle) {
+      if (cfg.enable_speckle_filter) {
+        dai::SpeckleFilterParams speckle;
+        speckle.enable = true;
+        speckle.speckleRange = cfg.speckle_range;
+        speckle.differenceThreshold = cfg.speckle_diff;
+        config.insertFilter(speckle);
+      }
+    } else if (filter == OakDepthFilterType::kSpatial) {
+      if (cfg.enable_spatial_filter) {
+        dai::SpatialFilterParams spatial;
+        spatial.enable = true;
+        spatial.alpha = cfg.spatial_alpha;
+        spatial.delta = cfg.spatial_delta;
+        spatial.holeFillingRadius = cfg.spatial_hole_radius;
+        spatial.numIterations = cfg.spatial_iterations;
+        config.insertFilter(spatial);
+      }
+    }
   }
 
   return config;
+}
+
+std::shared_ptr<dai::ImgFrame> FindClosestMessage(
+    const std::deque<std::shared_ptr<dai::ImgFrame>>& buf,
+    const std::shared_ptr<dai::ImgFrame>& target_msg,
+    double threshold_ms) {
+  if (buf.empty() || !target_msg) {
+    return nullptr;
+  }
+
+  const double target_ts = TimestampMs(target_msg);
+  std::shared_ptr<dai::ImgFrame> best;
+  double best_dt = std::numeric_limits<double>::max();
+  for (const auto& msg : buf) {
+    const double dt = std::abs(TimestampMs(msg) - target_ts);
+    if (dt < best_dt) {
+      best_dt = dt;
+      best = msg;
+    }
+  }
+
+  if (best_dt > threshold_ms) {
+    return nullptr;
+  }
+  return best;
 }
 
 void PrintConnectedCameras(dai::Device& device) {
@@ -223,6 +267,27 @@ bool OakRgbdCapture::Start() {
   return start_ok_;
 }
 
+OakFilterConfig OakRgbdCapture::InitialFilterConfig() const {
+  OakFilterConfig config;
+  config.enable_post_processing = cfg_.enable_post_processing;
+  config.median_mode = cfg_.median_mode;
+  config.enable_speckle_filter = cfg_.enable_speckle_filter;
+  config.speckle_range = cfg_.speckle_range;
+  config.speckle_diff = cfg_.speckle_diff;
+  config.enable_spatial_filter = cfg_.enable_spatial_filter;
+  config.spatial_alpha = cfg_.spatial_alpha;
+  config.spatial_delta = cfg_.spatial_delta;
+  config.spatial_hole_radius = cfg_.spatial_hole_radius;
+  config.spatial_iterations = cfg_.spatial_iterations;
+  return config;
+}
+
+void OakRgbdCapture::UpdateFilterConfig(const OakFilterConfig& config) {
+  std::lock_guard<std::mutex> lock(filter_mutex_);
+  pending_filter_config_ = config;
+  has_pending_filter_config_ = true;
+}
+
 void OakRgbdCapture::Stop() {
   running_.store(false);
   if (worker_.joinable()) {
@@ -238,6 +303,7 @@ bool OakRgbdCapture::TryGetLatest(TimedRgbdFrame& out) {
   out.timestamp_sec = latest_.timestamp_sec;
   out.pair_dt_ms = latest_.pair_dt_ms;
   out.bgr = latest_.bgr.clone();
+  out.raw_depth_mm = latest_.raw_depth_mm.clone();
   out.depth_mm = latest_.depth_mm.clone();
   has_new_frame_ = false;
   return true;
@@ -273,6 +339,7 @@ void OakRgbdCapture::PublishFrame(const TimedRgbdFrame& frame) {
   latest_.timestamp_sec = frame.timestamp_sec;
   latest_.pair_dt_ms = frame.pair_dt_ms;
   latest_.bgr = frame.bgr.clone();
+  latest_.raw_depth_mm = frame.raw_depth_mm.clone();
   latest_.depth_mm = frame.depth_mm.clone();
   has_new_frame_ = true;
 }
@@ -370,11 +437,13 @@ void OakRgbdCapture::CaptureLoop() {
 
     auto filters = pipeline.create<dai::node::ImageFilters>();
     filters->setRunOnHost(true);
-    *filters->initialConfig = BuildHostFilterConfig(cfg_);
+    *filters->initialConfig = BuildHostFilterConfig(InitialFilterConfig());
     stereo->depth.link(filters->input);
 
     auto rgb_queue = rgb_out->createOutputQueue(kOutputQueueSize, kOutputQueueBlocking);
+    auto raw_depth_queue = stereo->depth.createOutputQueue(kOutputQueueSize, kOutputQueueBlocking);
     auto depth_queue = filters->output.createOutputQueue(kOutputQueueSize, kOutputQueueBlocking);
+    auto filter_config_queue = filters->inputConfig.createInputQueue(4, false);
 
     std::cout << "\nOAK RGBD capture started" << std::endl;
     std::cout << "  FSYNC: CAM_B OUTPUT master, CAM_A/C INPUT" << std::endl;
@@ -390,11 +459,27 @@ void OakRgbdCapture::CaptureLoop() {
     ReportStart(true, "");
 
     std::deque<std::shared_ptr<dai::ImgFrame>> rgb_buf;
+    std::deque<std::shared_ptr<dai::ImgFrame>> raw_depth_buf;
     std::deque<std::shared_ptr<dai::ImgFrame>> depth_buf;
 
     pipeline.start();
     while (running_.load() && pipeline.isRunning()) {
       bool got_any = false;
+      OakFilterConfig pending_filter;
+      bool has_pending_filter = false;
+      {
+        std::lock_guard<std::mutex> lock(filter_mutex_);
+        if (has_pending_filter_config_) {
+          pending_filter = pending_filter_config_;
+          has_pending_filter_config_ = false;
+          has_pending_filter = true;
+        }
+      }
+      if (has_pending_filter) {
+        auto config = std::make_shared<dai::ImageFiltersConfig>(
+            BuildHostFilterConfig(pending_filter));
+        filter_config_queue->send(config);
+      }
 
       while (true) {
         auto msg = rgb_queue->tryGet<dai::ImgFrame>();
@@ -403,6 +488,15 @@ void OakRgbdCapture::CaptureLoop() {
         }
         AppendAndTrim(rgb_buf, msg, kPairBufferLimit, dropped_rgb_);
         ++image_count_;
+        got_any = true;
+      }
+
+      while (true) {
+        auto msg = raw_depth_queue->tryGet<dai::ImgFrame>();
+        if (!msg) {
+          break;
+        }
+        AppendAndTrim(raw_depth_buf, msg, kPairBufferLimit);
         got_any = true;
       }
 
@@ -432,6 +526,11 @@ void OakRgbdCapture::CaptureLoop() {
 
         cv::Mat bgr = Nv12ToBgr(rgb_msg, cfg_.rgb_width, cfg_.rgb_height);
         cv::Mat depth = DepthToU16(depth_msg);
+        cv::Mat raw_depth;
+        auto raw_depth_msg = FindClosestMessage(raw_depth_buf, depth_msg, cfg_.pair_threshold_ms);
+        if (raw_depth_msg) {
+          raw_depth = DepthToU16(raw_depth_msg);
+        }
 
         if (bgr.empty() || depth.empty()) {
           continue;
@@ -446,11 +545,17 @@ void OakRgbdCapture::CaptureLoop() {
                     << depth.cols << "x" << depth.rows << " type=" << depth.type() << std::endl;
           continue;
         }
+        if (!raw_depth.empty() &&
+            (raw_depth.cols != cfg_.rgb_width || raw_depth.rows != cfg_.rgb_height ||
+             raw_depth.type() != CV_16UC1)) {
+          raw_depth.release();
+        }
 
         TimedRgbdFrame frame;
         frame.timestamp_sec = TimestampSec(rgb_msg);
         frame.pair_dt_ms = pair_dt;
         frame.bgr = std::move(bgr);
+        frame.raw_depth_mm = std::move(raw_depth);
         frame.depth_mm = std::move(depth);
         PublishFrame(frame);
         ++paired_count_;

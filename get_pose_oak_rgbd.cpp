@@ -57,6 +57,229 @@ struct BodyFrame {
   cv::Vec3d euler_rad{0.0, 0.0, 0.0}; // roll(x), pitch(y), yaw(z)
 };
 
+constexpr const char* kMainWindow = "YOLO Pose - OAK CAM_A RGBD";
+constexpr const char* kControlsWindow = "OAK RGBD Controls";
+constexpr const char* kRawDepthWindow = "OAK Raw Depth";
+constexpr const char* kFilteredDepthWindow = "OAK Filtered Depth";
+
+const std::array<const char*, 6> kFilterOrderNames = {
+    "Speckle->Spatial->Median",
+    "Spatial->Speckle->Median",
+    "Median->Speckle->Spatial",
+    "Speckle->Median->Spatial",
+    "Spatial->Median->Speckle",
+    "Median->Spatial->Speckle"};
+
+struct DepthUiState {
+  int blend_depth_pct = 0;
+  int show_raw_depth = 0;
+  int show_filtered_depth = 0;
+  int median_mode = 0;
+  int speckle_enable = 0;
+  int speckle_range = 48;
+  int speckle_diff = 2;
+  int spatial_enable = 0;
+  int spatial_alpha_pct = 50;
+  int spatial_delta = 3;
+  int spatial_hole_radius = 2;
+  int spatial_iterations = 1;
+  int order_preset = 0;
+};
+
+static void ClampDepthUiState(DepthUiState& state) {
+  state.blend_depth_pct = std::max(0, std::min(100, state.blend_depth_pct));
+  state.show_raw_depth = state.show_raw_depth ? 1 : 0;
+  state.show_filtered_depth = state.show_filtered_depth ? 1 : 0;
+  state.median_mode = std::max(0, std::min(2, state.median_mode));
+  state.speckle_enable = state.speckle_enable ? 1 : 0;
+  state.speckle_range = std::max(0, std::min(240, state.speckle_range));
+  state.speckle_diff = std::max(0, std::min(100, state.speckle_diff));
+  state.spatial_enable = state.spatial_enable ? 1 : 0;
+  state.spatial_alpha_pct = std::max(0, std::min(100, state.spatial_alpha_pct));
+  state.spatial_delta = std::max(0, std::min(200, state.spatial_delta));
+  state.spatial_hole_radius = std::max(0, std::min(16, state.spatial_hole_radius));
+  state.spatial_iterations = std::max(0, std::min(4, state.spatial_iterations));
+  state.order_preset = std::max(0, std::min(static_cast<int>(kFilterOrderNames.size()) - 1,
+                                            state.order_preset));
+}
+
+static bool SameDepthUiState(const DepthUiState& a, const DepthUiState& b) {
+  return a.blend_depth_pct == b.blend_depth_pct &&
+         a.show_raw_depth == b.show_raw_depth &&
+         a.show_filtered_depth == b.show_filtered_depth &&
+         a.median_mode == b.median_mode &&
+         a.speckle_enable == b.speckle_enable &&
+         a.speckle_range == b.speckle_range &&
+         a.speckle_diff == b.speckle_diff &&
+         a.spatial_enable == b.spatial_enable &&
+         a.spatial_alpha_pct == b.spatial_alpha_pct &&
+         a.spatial_delta == b.spatial_delta &&
+         a.spatial_hole_radius == b.spatial_hole_radius &&
+         a.spatial_iterations == b.spatial_iterations &&
+         a.order_preset == b.order_preset;
+}
+
+static std::vector<OakDepthFilterType> FilterOrderFromPreset(int preset) {
+  switch (preset) {
+    case 1:
+      return {OakDepthFilterType::kSpatial, OakDepthFilterType::kSpeckle, OakDepthFilterType::kMedian};
+    case 2:
+      return {OakDepthFilterType::kMedian, OakDepthFilterType::kSpeckle, OakDepthFilterType::kSpatial};
+    case 3:
+      return {OakDepthFilterType::kSpeckle, OakDepthFilterType::kMedian, OakDepthFilterType::kSpatial};
+    case 4:
+      return {OakDepthFilterType::kSpatial, OakDepthFilterType::kMedian, OakDepthFilterType::kSpeckle};
+    case 5:
+      return {OakDepthFilterType::kMedian, OakDepthFilterType::kSpatial, OakDepthFilterType::kSpeckle};
+    case 0:
+    default:
+      return {OakDepthFilterType::kSpeckle, OakDepthFilterType::kSpatial, OakDepthFilterType::kMedian};
+  }
+}
+
+static OakFilterConfig MakeOakFilterConfig(const DepthUiState& state) {
+  OakFilterConfig config;
+  config.enable_post_processing = true;
+  config.median_mode = state.median_mode;
+  config.enable_speckle_filter = state.speckle_enable != 0;
+  config.speckle_range = state.speckle_range;
+  config.speckle_diff = state.speckle_diff;
+  config.enable_spatial_filter = state.spatial_enable != 0;
+  config.spatial_alpha = static_cast<float>(state.spatial_alpha_pct) / 100.0f;
+  config.spatial_delta = state.spatial_delta;
+  config.spatial_hole_radius = state.spatial_hole_radius;
+  config.spatial_iterations = state.spatial_iterations;
+  config.filtering_order = FilterOrderFromPreset(state.order_preset);
+  return config;
+}
+
+static void SetupDepthControls(DepthUiState& state) {
+  cv::namedWindow(kControlsWindow, cv::WINDOW_NORMAL);
+  cv::resizeWindow(kControlsWindow, 680, 360);
+  cv::createTrackbar("Blend depth %", kControlsWindow, &state.blend_depth_pct, 100);
+  cv::createTrackbar("Show raw depth", kControlsWindow, &state.show_raw_depth, 1);
+  cv::createTrackbar("Show filtered depth", kControlsWindow, &state.show_filtered_depth, 1);
+  cv::createTrackbar("Order preset", kControlsWindow, &state.order_preset,
+                     static_cast<int>(kFilterOrderNames.size()) - 1);
+  cv::createTrackbar("Median 0off 1x3 2x5", kControlsWindow, &state.median_mode, 2);
+  cv::createTrackbar("Speckle enable", kControlsWindow, &state.speckle_enable, 1);
+  cv::createTrackbar("Speckle range", kControlsWindow, &state.speckle_range, 240);
+  cv::createTrackbar("Speckle diff", kControlsWindow, &state.speckle_diff, 100);
+  cv::createTrackbar("Spatial enable", kControlsWindow, &state.spatial_enable, 1);
+  cv::createTrackbar("Spatial alpha x100", kControlsWindow, &state.spatial_alpha_pct, 100);
+  cv::createTrackbar("Spatial delta", kControlsWindow, &state.spatial_delta, 200);
+  cv::createTrackbar("Spatial hole radius", kControlsWindow, &state.spatial_hole_radius, 16);
+  cv::createTrackbar("Spatial iterations", kControlsWindow, &state.spatial_iterations, 4);
+}
+
+static std::string ActiveFiltersText(const DepthUiState& state) {
+  std::vector<std::string> names;
+  for (const auto filter : FilterOrderFromPreset(state.order_preset)) {
+    if (filter == OakDepthFilterType::kMedian && state.median_mode != 0) {
+      names.push_back(state.median_mode == 1 ? "Median3x3" : "Median5x5");
+    } else if (filter == OakDepthFilterType::kSpeckle && state.speckle_enable) {
+      names.push_back("Speckle");
+    } else if (filter == OakDepthFilterType::kSpatial && state.spatial_enable) {
+      names.push_back("Spatial");
+    }
+  }
+  if (names.empty()) {
+    return "passthrough";
+  }
+
+  std::ostringstream os;
+  for (size_t i = 0; i < names.size(); ++i) {
+    if (i > 0) {
+      os << " -> ";
+    }
+    os << names[i];
+  }
+  return os.str();
+}
+
+static void UpdateControlsPanel(const DepthUiState& state) {
+  cv::Mat panel(240, 680, CV_8UC3, cv::Scalar(30, 30, 30));
+  int y = 26;
+  const int line = 24;
+  auto draw_line = [&](const std::string& text) {
+    cv::putText(panel, text, cv::Point(12, y), cv::FONT_HERSHEY_SIMPLEX, 0.55,
+                cv::Scalar(240, 240, 240), 1, cv::LINE_AA);
+    y += line;
+  };
+
+  draw_line("Order preset: " + std::string(kFilterOrderNames[state.order_preset]));
+  draw_line("Active filters: " + ActiveFiltersText(state));
+  draw_line("Blend depth: " + std::to_string(state.blend_depth_pct) + "%");
+  draw_line("Raw window: " + std::string(state.show_raw_depth ? "ON" : "OFF") +
+            " | Filtered window: " + std::string(state.show_filtered_depth ? "ON" : "OFF"));
+  draw_line("Median: " + std::string(state.median_mode == 0 ? "OFF" :
+                                     (state.median_mode == 1 ? "3x3" : "5x5")));
+  draw_line("Speckle: " + std::string(state.speckle_enable ? "ON" : "OFF") +
+            " range=" + std::to_string(state.speckle_range) +
+            " diff=" + std::to_string(state.speckle_diff));
+  std::ostringstream spatial;
+  spatial << "Spatial: " << (state.spatial_enable ? "ON" : "OFF")
+          << " alpha=" << std::fixed << std::setprecision(2)
+          << (static_cast<double>(state.spatial_alpha_pct) / 100.0)
+          << " delta=" << state.spatial_delta
+          << " hole=" << state.spatial_hole_radius
+          << " iter=" << state.spatial_iterations;
+  draw_line(spatial.str());
+  draw_line("Temporal filter: disabled for fast trampoline motion");
+  cv::imshow(kControlsWindow, panel);
+}
+
+static cv::Mat ColorizeDepth(const cv::Mat& depth) {
+  if (depth.empty() || depth.type() != CV_16UC1) {
+    return cv::Mat();
+  }
+
+  std::vector<uint16_t> valid;
+  valid.reserve(static_cast<size_t>(depth.rows * depth.cols / 2));
+  for (int y = 0; y < depth.rows; ++y) {
+    const uint16_t* row = depth.ptr<uint16_t>(y);
+    for (int x = 0; x < depth.cols; ++x) {
+      if (row[x] > 0) {
+        valid.push_back(row[x]);
+      }
+    }
+  }
+  if (valid.empty()) {
+    return cv::Mat::zeros(depth.size(), CV_8UC3);
+  }
+
+  auto percentile = [&](double ratio) {
+    size_t idx = static_cast<size_t>(ratio * static_cast<double>(valid.size() - 1));
+    std::nth_element(valid.begin(), valid.begin() + idx, valid.end());
+    return valid[idx];
+  };
+  uint16_t min_depth = percentile(0.03);
+  uint16_t max_depth = percentile(0.95);
+  if (max_depth <= min_depth) {
+    max_depth = static_cast<uint16_t>(min_depth + 1);
+  }
+
+  cv::Mat normalized(depth.size(), CV_8UC1, cv::Scalar(0));
+  const double scale = 255.0 / static_cast<double>(max_depth - min_depth);
+  for (int y = 0; y < depth.rows; ++y) {
+    const uint16_t* src = depth.ptr<uint16_t>(y);
+    uint8_t* dst = normalized.ptr<uint8_t>(y);
+    for (int x = 0; x < depth.cols; ++x) {
+      if (src[x] == 0) {
+        dst[x] = 0;
+      } else {
+        const double v = (static_cast<double>(src[x]) - min_depth) * scale;
+        dst[x] = static_cast<uint8_t>(std::max(0.0, std::min(255.0, v)));
+      }
+    }
+  }
+
+  cv::Mat color;
+  cv::applyColorMap(normalized, color, cv::COLORMAP_JET);
+  color.setTo(cv::Scalar(0, 0, 0), depth == 0);
+  return color;
+}
+
 
 struct BodyBoxMeasurement {
   bool valid = false;
@@ -627,14 +850,28 @@ int main(int argc, char **argv) {
   oak_cfg.subpixel = true;
   oak_cfg.extended_disparity = false;
   oak_cfg.enable_post_processing = true;
-  oak_cfg.enable_speckle_filter = false;
+  oak_cfg.median_mode = 0;
+  oak_cfg.enable_speckle_filter = true;
   oak_cfg.speckle_range = 48;
   oak_cfg.speckle_diff = 2;
-  oak_cfg.enable_spatial_filter = false;
+  oak_cfg.enable_spatial_filter = true;
   oak_cfg.spatial_alpha = 0.50f;
   oak_cfg.spatial_delta = 3;
   oak_cfg.spatial_hole_radius = 2;
   oak_cfg.spatial_iterations = 1;
+
+  DepthUiState depth_ui;
+  depth_ui.median_mode = oak_cfg.median_mode;
+  depth_ui.speckle_enable = oak_cfg.enable_speckle_filter ? 1 : 0;
+  depth_ui.speckle_range = oak_cfg.speckle_range;
+  depth_ui.speckle_diff = oak_cfg.speckle_diff;
+  depth_ui.spatial_enable = oak_cfg.enable_spatial_filter ? 1 : 0;
+  depth_ui.spatial_alpha_pct = static_cast<int>(std::round(oak_cfg.spatial_alpha * 100.0f));
+  depth_ui.spatial_delta = oak_cfg.spatial_delta;
+  depth_ui.spatial_hole_radius = oak_cfg.spatial_hole_radius;
+  depth_ui.spatial_iterations = oak_cfg.spatial_iterations;
+  ClampDepthUiState(depth_ui);
+  DepthUiState last_sent_depth_ui = depth_ui;
 
   OakRgbdCapture oak_capture(oak_cfg);
   if (!oak_capture.Start()) {
@@ -710,6 +947,8 @@ int main(int argc, char **argv) {
   bool show_keypoints = true;
   bool show_skeleton = true;
   bool show_info = true;
+  bool raw_depth_window_open = false;
+  bool filtered_depth_window_open = false;
 
   // Body frame tracking state
   RotationTracker rotation_tracker;
@@ -727,6 +966,8 @@ int main(int argc, char **argv) {
 
   std::cout << "=== Starting Detection ===\n" << std::endl;
   std::cout << "Waiting for OAK RGBD frames..." << std::endl;
+  SetupDepthControls(depth_ui);
+  UpdateControlsPanel(depth_ui);
 
   // Main loop
   while (true) {
@@ -741,9 +982,20 @@ int main(int argc, char **argv) {
 
     cv::Mat left_image = rgbd.bgr;
     cv::Mat depth_data = rgbd.depth_mm;
+    cv::Mat raw_depth_data = rgbd.raw_depth_mm;
     double image_timestamp = rgbd.timestamp_sec;
     (void)image_timestamp;
     depth_sync_error_ms = rgbd.pair_dt_ms;
+
+    ClampDepthUiState(depth_ui);
+    if (!SameDepthUiState(depth_ui, last_sent_depth_ui)) {
+      oak_capture.UpdateFilterConfig(MakeOakFilterConfig(depth_ui));
+      last_sent_depth_ui = depth_ui;
+      std::cout << "Filter pipeline: " << ActiveFiltersText(depth_ui)
+                << " | order preset: " << kFilterOrderNames[depth_ui.order_preset]
+                << std::endl;
+    }
+    UpdateControlsPanel(depth_ui);
 
     // Process if we have an image
     if (!left_image.empty()) {
@@ -786,6 +1038,17 @@ int main(int argc, char **argv) {
 
       // Visualize (use lower threshold for keypoints: 0.3 instead of 0.5)
       cv::Mat display = left_image.clone();
+      cv::Mat filtered_depth_color;
+      if (!depth_data.empty()) {
+        filtered_depth_color = ColorizeDepth(depth_data);
+        if (!filtered_depth_color.empty() && depth_ui.blend_depth_pct > 0) {
+          if (filtered_depth_color.size() != display.size()) {
+            cv::resize(filtered_depth_color, filtered_depth_color, display.size(), 0, 0, cv::INTER_NEAREST);
+          }
+          const double depth_weight = static_cast<double>(depth_ui.blend_depth_pct) / 100.0;
+          cv::addWeighted(display, 1.0 - depth_weight, filtered_depth_color, depth_weight, 0.0, display);
+        }
+      }
       DrawPoses(display, poses, show_bbox, show_keypoints, show_skeleton, 0.3f);
 
       // Draw info overlay (2D only, no depth)
@@ -1166,7 +1429,7 @@ int main(int argc, char **argv) {
       }
 
       // Set mouse callback on YOLO Pose window for depth interaction
-      cv::setMouseCallback("YOLO Pose - OAK CAM_A RGBD", OnDepthMouseCallback, &depth_region);
+      cv::setMouseCallback(kMainWindow, OnDepthMouseCallback, &depth_region);
 
       // Display status panel (top-right corner)
       int panel_x = display.cols - 180;
@@ -1370,7 +1633,28 @@ int main(int argc, char **argv) {
 
       cv::imshow("Body Frame Metrics", metrics_panel);
 
-      cv::imshow("YOLO Pose - OAK CAM_A RGBD", display);
+      cv::imshow(kMainWindow, display);
+      if (depth_ui.show_raw_depth && !raw_depth_data.empty()) {
+        cv::imshow(kRawDepthWindow, ColorizeDepth(raw_depth_data));
+        raw_depth_window_open = true;
+      } else {
+        if (raw_depth_window_open) {
+          cv::destroyWindow(kRawDepthWindow);
+          raw_depth_window_open = false;
+        }
+      }
+      if (depth_ui.show_filtered_depth && !depth_data.empty()) {
+        if (filtered_depth_color.empty()) {
+          filtered_depth_color = ColorizeDepth(depth_data);
+        }
+        cv::imshow(kFilteredDepthWindow, filtered_depth_color);
+        filtered_depth_window_open = true;
+      } else {
+        if (filtered_depth_window_open) {
+          cv::destroyWindow(kFilteredDepthWindow);
+          filtered_depth_window_open = false;
+        }
+      }
     }
 
     // Show depth region details when depth data is available
