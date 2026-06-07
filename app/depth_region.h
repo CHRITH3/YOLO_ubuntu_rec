@@ -508,6 +508,22 @@ public:
     return coord_system_ready_;
   }
 
+  int GetRoiClickCount() const {
+    return click_count_;
+  }
+
+  bool IsPlaneFitReady() const {
+    return plane_fit_ready_;
+  }
+
+  int GetPlaneInlierCount() const {
+    return plane_inlier_count_;
+  }
+
+  double GetPlaneInlierRatio() const {
+    return plane_inlier_ratio_;
+  }
+
   // Retrieve coordinate system (bed frame) basis in camera coordinates and origin.
   bool GetCoordinateSystem(cv::Mat &rotation_cam, cv::Point3d &origin_cam) const {
     if (!coord_system_ready_) {

@@ -49,6 +49,16 @@ export DEPTHAI_AUTOCALIBRATION=OFF
 ./build_agent_out/yolo_pose_oak_rgbd models/yolov8n-pose-640.onnx
 ```
 
+For the Flask realtime page integration, run the same target in local server mode:
+
+```bash
+export DEPTHAI_AUTOCALIBRATION=OFF
+./build_agent_out/yolo_pose_oak_rgbd models/yolov8n-pose-640.onnx --server --port 8081
+```
+
+Server mode exposes `GET /stream`, `GET /status`, `POST /click`,
+`POST /filter_params`, and `POST /control` on `127.0.0.1:8081`.
+
 The old target can still be built by setting `-DBUILD_INDEMIND_TARGET=ON` if the INDEMIND SDK files are present.
 
 ## Notes

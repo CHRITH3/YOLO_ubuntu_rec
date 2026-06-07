@@ -21,16 +21,23 @@
 #include <opencv2/opencv.hpp>
 
 #include <mutex>
+#include <condition_variable>
 #include <iomanip>
 #include <sstream>
 #include <chrono>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <fstream>
 #include <deque>
 #include <limits>
 #include <cstdlib>
+#include <map>
+#include <regex>
+#include <thread>
+
+#include <httplib.h>
 
 
 #define FONT_FACE cv::FONT_HERSHEY_PLAIN
@@ -228,6 +235,357 @@ static void UpdateControlsPanel(const DepthUiState& state) {
   draw_line("Temporal filter: disabled for fast trampoline motion");
   cv::imshow(kControlsWindow, panel);
 }
+
+enum class RealtimeCommandType {
+  kMouseClick,
+  kUpdateFilter,
+  kControl,
+};
+
+struct RealtimeCommand {
+  RealtimeCommandType type = RealtimeCommandType::kControl;
+  int x = 0;
+  int y = 0;
+  std::string action;
+  std::map<std::string, int> int_params;
+};
+
+static bool ExtractJsonInt(const std::string& body, const std::string& key, int& value) {
+  const std::regex pattern("\"" + key + "\"\\s*:\\s*(-?\\d+)");
+  std::smatch match;
+  if (!std::regex_search(body, match, pattern)) {
+    return false;
+  }
+  value = std::stoi(match[1].str());
+  return true;
+}
+
+static bool ExtractJsonString(const std::string& body, const std::string& key, std::string& value) {
+  const std::regex pattern("\"" + key + "\"\\s*:\\s*\"([^\"]*)\"");
+  std::smatch match;
+  if (!std::regex_search(body, match, pattern)) {
+    return false;
+  }
+  value = match[1].str();
+  return true;
+}
+
+static std::map<std::string, int> ExtractFilterParams(const std::string& body) {
+  const std::array<const char*, 13> keys = {
+      "blend_depth_pct",
+      "show_raw_depth",
+      "show_filtered_depth",
+      "median_mode",
+      "speckle_enable",
+      "speckle_range",
+      "speckle_diff",
+      "spatial_enable",
+      "spatial_alpha_pct",
+      "spatial_delta",
+      "spatial_hole_radius",
+      "spatial_iterations",
+      "order_preset"};
+
+  std::map<std::string, int> out;
+  for (const auto* key : keys) {
+    int value = 0;
+    if (ExtractJsonInt(body, key, value)) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+static void ApplyFilterParams(DepthUiState& state, const std::map<std::string, int>& params) {
+  auto set_if_present = [&](const std::string& key, int& field) {
+    const auto it = params.find(key);
+    if (it != params.end()) {
+      field = it->second;
+    }
+  };
+
+  set_if_present("blend_depth_pct", state.blend_depth_pct);
+  set_if_present("show_raw_depth", state.show_raw_depth);
+  set_if_present("show_filtered_depth", state.show_filtered_depth);
+  set_if_present("median_mode", state.median_mode);
+  set_if_present("speckle_enable", state.speckle_enable);
+  set_if_present("speckle_range", state.speckle_range);
+  set_if_present("speckle_diff", state.speckle_diff);
+  set_if_present("spatial_enable", state.spatial_enable);
+  set_if_present("spatial_alpha_pct", state.spatial_alpha_pct);
+  set_if_present("spatial_delta", state.spatial_delta);
+  set_if_present("spatial_hole_radius", state.spatial_hole_radius);
+  set_if_present("spatial_iterations", state.spatial_iterations);
+  set_if_present("order_preset", state.order_preset);
+  ClampDepthUiState(state);
+}
+
+static std::string FilterParamsJson(const DepthUiState& state) {
+  std::ostringstream os;
+  os << "{"
+     << "\"blend_depth_pct\":" << state.blend_depth_pct << ","
+     << "\"show_raw_depth\":" << state.show_raw_depth << ","
+     << "\"show_filtered_depth\":" << state.show_filtered_depth << ","
+     << "\"median_mode\":" << state.median_mode << ","
+     << "\"speckle_enable\":" << state.speckle_enable << ","
+     << "\"speckle_range\":" << state.speckle_range << ","
+     << "\"speckle_diff\":" << state.speckle_diff << ","
+     << "\"spatial_enable\":" << state.spatial_enable << ","
+     << "\"spatial_alpha_pct\":" << state.spatial_alpha_pct << ","
+     << "\"spatial_delta\":" << state.spatial_delta << ","
+     << "\"spatial_hole_radius\":" << state.spatial_hole_radius << ","
+     << "\"spatial_iterations\":" << state.spatial_iterations << ","
+     << "\"order_preset\":" << state.order_preset
+     << "}";
+  return os.str();
+}
+
+static std::string JsonEscape(const std::string& input) {
+  std::ostringstream os;
+  for (char ch : input) {
+    if (ch == '"' || ch == '\\') {
+      os << '\\' << ch;
+    } else if (ch == '\n') {
+      os << "\\n";
+    } else {
+      os << ch;
+    }
+  }
+  return os.str();
+}
+
+static std::string RealtimeStatusJson(bool connected,
+                                      int frame_width,
+                                      int frame_height,
+                                      double fps,
+                                      double inference_ms,
+                                      double sync_dt_ms,
+                                      size_t detected_persons,
+                                      bool bed_ready,
+                                      int roi_clicks,
+                                      bool recording,
+                                      size_t landing_count,
+                                      const std::string& posture,
+                                      const DepthUiState& depth_ui) {
+  std::ostringstream os;
+  os << "{"
+     << "\"success\":true,"
+     << "\"connected\":" << (connected ? "true" : "false") << ","
+     << "\"frame\":{\"width\":" << frame_width << ",\"height\":" << frame_height << "},"
+     << "\"fps\":" << std::fixed << std::setprecision(2) << fps << ","
+     << "\"inference_ms\":" << std::fixed << std::setprecision(2) << inference_ms << ","
+     << "\"sync_dt_ms\":" << std::fixed << std::setprecision(2) << sync_dt_ms << ","
+     << "\"detected_persons\":" << detected_persons << ","
+     << "\"bed_ready\":" << (bed_ready ? "true" : "false") << ","
+     << "\"roi_clicks\":" << roi_clicks << ","
+     << "\"recording\":" << (recording ? "true" : "false") << ","
+     << "\"landing_count\":" << landing_count << ","
+     << "\"posture\":\"" << JsonEscape(posture) << "\","
+     << "\"filter_params\":" << FilterParamsJson(depth_ui)
+     << "}";
+  return os.str();
+}
+
+class RealtimeBridge {
+public:
+  ~RealtimeBridge() {
+    Stop();
+  }
+
+  bool Start(int port) {
+    if (running_) {
+      return true;
+    }
+
+    server_.Get("/status", [this](const httplib::Request&, httplib::Response& res) {
+      std::lock_guard<std::mutex> lock(status_mutex_);
+      res.set_content(status_json_, "application/json");
+    });
+
+    server_.Get("/snapshot", [this](const httplib::Request&, httplib::Response& res) {
+      std::vector<unsigned char> frame;
+      {
+        std::lock_guard<std::mutex> lock(frame_mutex_);
+        frame = latest_jpeg_;
+      }
+      if (frame.empty()) {
+        res.status = 503;
+        res.set_content("{\"success\":false,\"error\":\"No frame available\"}", "application/json");
+        return;
+      }
+      res.set_content(reinterpret_cast<const char*>(frame.data()), frame.size(), "image/jpeg");
+    });
+
+    server_.Get("/stream", [this](const httplib::Request&, httplib::Response& res) {
+      res.set_header("Cache-Control", "no-cache");
+      res.set_header("Pragma", "no-cache");
+      res.set_chunked_content_provider(
+          "multipart/x-mixed-replace; boundary=frame",
+          [this](size_t, httplib::DataSink& sink) {
+            size_t last_frame_seq = 0;
+            while (running_ && !stop_requested_) {
+              std::vector<unsigned char> frame;
+              {
+                std::unique_lock<std::mutex> lock(frame_mutex_);
+                frame_cv_.wait(lock, [this]() {
+                  return !latest_jpeg_.empty() || !running_ || stop_requested_;
+                });
+                frame_cv_.wait(lock, [this, last_frame_seq]() {
+                  return frame_seq_ != last_frame_seq || !running_ || stop_requested_;
+                });
+                if (!running_ || stop_requested_) {
+                  break;
+                }
+                frame = latest_jpeg_;
+                last_frame_seq = frame_seq_;
+              }
+
+              std::ostringstream header;
+              header << "--frame\r\n"
+                     << "Content-Type: image/jpeg\r\n"
+                     << "Content-Length: " << frame.size() << "\r\n\r\n";
+              const std::string header_text = header.str();
+              if (!sink.write(header_text.data(), header_text.size())) {
+                return false;
+              }
+              if (!sink.write(reinterpret_cast<const char*>(frame.data()), frame.size())) {
+                return false;
+              }
+              if (!sink.write("\r\n", 2)) {
+                return false;
+              }
+            }
+            sink.done();
+            return true;
+          });
+    });
+
+    server_.Post("/click", [this](const httplib::Request& req, httplib::Response& res) {
+      RealtimeCommand cmd;
+      cmd.type = RealtimeCommandType::kMouseClick;
+      if (!ExtractJsonInt(req.body, "x", cmd.x) || !ExtractJsonInt(req.body, "y", cmd.y)) {
+        res.status = 400;
+        res.set_content("{\"success\":false,\"error\":\"x and y are required\"}", "application/json");
+        return;
+      }
+      PushCommand(cmd);
+      res.set_content("{\"success\":true}", "application/json");
+    });
+
+    server_.Post("/filter_params", [this](const httplib::Request& req, httplib::Response& res) {
+      RealtimeCommand cmd;
+      cmd.type = RealtimeCommandType::kUpdateFilter;
+      cmd.int_params = ExtractFilterParams(req.body);
+      if (cmd.int_params.empty()) {
+        res.status = 400;
+        res.set_content("{\"success\":false,\"error\":\"No supported filter params found\"}", "application/json");
+        return;
+      }
+      PushCommand(cmd);
+      res.set_content("{\"success\":true}", "application/json");
+    });
+
+    server_.Post("/control", [this](const httplib::Request& req, httplib::Response& res) {
+      RealtimeCommand cmd;
+      cmd.type = RealtimeCommandType::kControl;
+      if (!ExtractJsonString(req.body, "action", cmd.action)) {
+        res.status = 400;
+        res.set_content("{\"success\":false,\"error\":\"action is required\"}", "application/json");
+        return;
+      }
+      if (cmd.action == "quit" || cmd.action == "stop_server") {
+        stop_requested_ = true;
+      }
+      PushCommand(cmd);
+      res.set_content("{\"success\":true}", "application/json");
+    });
+
+    status_json_ = "{\"success\":true,\"connected\":false,\"frame\":{\"width\":640,\"height\":400}}";
+    running_ = true;
+    server_thread_ = std::thread([this, port]() {
+      if (!server_.listen("127.0.0.1", port)) {
+        std::cerr << "[Realtime] HTTP server failed on 127.0.0.1:" << port << std::endl;
+        running_ = false;
+      }
+    });
+    std::cout << "[Realtime] HTTP server listening on http://127.0.0.1:" << port << std::endl;
+    return true;
+  }
+
+  void Stop() {
+    if (!running_ && !server_thread_.joinable()) {
+      return;
+    }
+    running_ = false;
+    stop_requested_ = true;
+    frame_cv_.notify_all();
+    server_.stop();
+    if (server_thread_.joinable()) {
+      server_thread_.join();
+    }
+  }
+
+  bool ShouldStop() const {
+    return stop_requested_;
+  }
+
+  void PublishFrame(const cv::Mat& frame) {
+    if (!running_ || frame.empty()) {
+      return;
+    }
+    std::vector<unsigned char> jpg;
+    const std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 82};
+    if (!cv::imencode(".jpg", frame, jpg, params)) {
+      return;
+    }
+    {
+      std::lock_guard<std::mutex> lock(frame_mutex_);
+      latest_jpeg_ = std::move(jpg);
+      ++frame_seq_;
+    }
+    frame_cv_.notify_all();
+  }
+
+  void SetStatusJson(const std::string& status_json) {
+    if (!running_) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(status_mutex_);
+    status_json_ = status_json;
+  }
+
+  bool TryPopCommand(RealtimeCommand& out) {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    if (commands_.empty()) {
+      return false;
+    }
+    out = commands_.front();
+    commands_.pop_front();
+    return true;
+  }
+
+private:
+  void PushCommand(const RealtimeCommand& command) {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    commands_.push_back(command);
+  }
+
+  std::atomic<bool> running_{false};
+  std::atomic<bool> stop_requested_{false};
+  httplib::Server server_;
+  std::thread server_thread_;
+
+  std::mutex frame_mutex_;
+  std::condition_variable frame_cv_;
+  std::vector<unsigned char> latest_jpeg_;
+  size_t frame_seq_ = 0;
+
+  std::mutex status_mutex_;
+  std::string status_json_;
+
+  std::mutex command_mutex_;
+  std::deque<RealtimeCommand> commands_;
+};
 
 static cv::Mat ColorizeDepth(const cv::Mat& depth) {
   if (depth.empty() || depth.type() != CV_16UC1) {
@@ -823,12 +1181,24 @@ static bool BuildBodyFrameFromPose(const PoseResult &pose,
 }
 
 int main(int argc, char **argv) {
-  (void)argc;
+  bool server_mode = false;
+  int server_port = 8081;
 
   // Check model file
   std::string model_path = "models/yolov8n-pose-640.onnx";
-  if (argc > 1) {
-    model_path = argv[1];
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--server") {
+      server_mode = true;
+    } else if (arg == "--port" && i + 1 < argc) {
+      server_port = std::stoi(argv[++i]);
+    } else if (arg.rfind("--port=", 0) == 0) {
+      server_port = std::stoi(arg.substr(std::string("--port=").size()));
+    } else if (arg == "--model" && i + 1 < argc) {
+      model_path = argv[++i];
+    } else if (!arg.empty() && arg[0] != '-') {
+      model_path = arg;
+    }
   }
 
   setenv("DEPTHAI_AUTOCALIBRATION", "OFF", 1);
@@ -873,10 +1243,34 @@ int main(int argc, char **argv) {
   ClampDepthUiState(depth_ui);
   DepthUiState last_sent_depth_ui = depth_ui;
 
+  RealtimeBridge realtime_bridge;
+  if (server_mode) {
+    realtime_bridge.Start(server_port);
+  }
+
   OakRgbdCapture oak_capture(oak_cfg);
   if (!oak_capture.Start()) {
+    const std::string error = oak_capture.GetLastError();
     std::cerr << "ERROR: Failed to start OAK RGBD capture: "
-              << oak_capture.GetLastError() << std::endl;
+              << error << std::endl;
+    if (server_mode) {
+      std::ostringstream status;
+      status << "{"
+             << "\"success\":false,"
+             << "\"connected\":false,"
+             << "\"error\":\"" << JsonEscape(error) << "\","
+             << "\"frame\":{\"width\":" << oak_cfg.rgb_width
+             << ",\"height\":" << oak_cfg.rgb_height << "},"
+             << "\"filter_params\":" << FilterParamsJson(depth_ui)
+             << "}";
+      realtime_bridge.SetStatusJson(status.str());
+      std::cout << "[Realtime] Service is running without an OAK device. "
+                << "Fix the device connection, then restart this process." << std::endl;
+      while (!realtime_bridge.ShouldStop()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      }
+      realtime_bridge.Stop();
+    }
     return -1;
   }
 
@@ -966,16 +1360,70 @@ int main(int argc, char **argv) {
 
   std::cout << "=== Starting Detection ===\n" << std::endl;
   std::cout << "Waiting for OAK RGBD frames..." << std::endl;
-  SetupDepthControls(depth_ui);
-  UpdateControlsPanel(depth_ui);
+  if (!server_mode) {
+    SetupDepthControls(depth_ui);
+    UpdateControlsPanel(depth_ui);
+  }
 
   // Main loop
   while (true) {
+    if (server_mode) {
+      RealtimeCommand realtime_cmd;
+      while (realtime_bridge.TryPopCommand(realtime_cmd)) {
+        if (realtime_cmd.type == RealtimeCommandType::kMouseClick) {
+          depth_region.OnMouse(cv::EVENT_LBUTTONDOWN, realtime_cmd.x, realtime_cmd.y, 0);
+        } else if (realtime_cmd.type == RealtimeCommandType::kUpdateFilter) {
+          ApplyFilterParams(depth_ui, realtime_cmd.int_params);
+          oak_capture.UpdateFilterConfig(MakeOakFilterConfig(depth_ui));
+          last_sent_depth_ui = depth_ui;
+          std::cout << "Filter pipeline: " << ActiveFiltersText(depth_ui)
+                    << " | order preset: " << kFilterOrderNames[depth_ui.order_preset]
+                    << std::endl;
+        } else if (realtime_cmd.type == RealtimeCommandType::kControl) {
+          const std::string& action = realtime_cmd.action;
+          if (action == "start_record") {
+            if (!g_runtime_flags.record_enabled) {
+              g_runtime_flags.record_enabled = true;
+              CreateNewSession();
+              depth_region.ClearLandingPoints();
+            }
+          } else if (action == "stop_record") {
+            g_runtime_flags.record_enabled = false;
+          } else if (action == "clear_landing") {
+            depth_region.ClearLandingPoints();
+          } else if (action == "save_landing") {
+            if (g_current_session.active) {
+              depth_region.FlushLandingPoints(g_current_session.output_dir);
+            }
+          } else if (action == "toggle_keypoints") {
+            show_keypoints = !show_keypoints;
+          } else if (action == "toggle_skeleton") {
+            show_skeleton = !show_skeleton;
+          } else if (action == "toggle_info") {
+            show_info = !show_info;
+          } else if (action == "increase_noise") {
+            depth_region.IncreaseNoiseThreshold();
+          } else if (action == "decrease_noise") {
+            depth_region.DecreaseNoiseThreshold();
+          } else if (action == "increase_window") {
+            depth_region.IncreaseWindowHalf();
+          } else if (action == "decrease_window") {
+            depth_region.DecreaseWindowHalf();
+          }
+        }
+      }
+      if (realtime_bridge.ShouldStop()) {
+        break;
+      }
+    }
+
     TimedRgbdFrame rgbd;
     if (!oak_capture.TryGetLatest(rgbd)) {
-      int key = cv::waitKey(1);
-      if (key == 27 || key == 'q' || key == 'Q') {
-        break;
+      if (!server_mode) {
+        int key = cv::waitKey(1);
+        if (key == 27 || key == 'q' || key == 'Q') {
+          break;
+        }
       }
       continue;
     }
@@ -995,7 +1443,9 @@ int main(int argc, char **argv) {
                 << " | order preset: " << kFilterOrderNames[depth_ui.order_preset]
                 << std::endl;
     }
-    UpdateControlsPanel(depth_ui);
+    if (!server_mode) {
+      UpdateControlsPanel(depth_ui);
+    }
 
     // Process if we have an image
     if (!left_image.empty()) {
@@ -1429,7 +1879,9 @@ int main(int argc, char **argv) {
       }
 
       // Set mouse callback on YOLO Pose window for depth interaction
-      cv::setMouseCallback(kMainWindow, OnDepthMouseCallback, &depth_region);
+      if (!server_mode) {
+        cv::setMouseCallback(kMainWindow, OnDepthMouseCallback, &depth_region);
+      }
 
       // Display status panel (top-right corner)
       int panel_x = display.cols - 180;
@@ -1631,43 +2083,65 @@ int main(int argc, char **argv) {
         metrics_y += metrics_line;
       }
 
-      cv::imshow("Body Frame Metrics", metrics_panel);
+      if (server_mode) {
+        realtime_bridge.SetStatusJson(RealtimeStatusJson(
+            true,
+            display.cols,
+            display.rows,
+            current_fps,
+            inference_time,
+            depth_sync_error_ms,
+            poses.size(),
+            depth_region.IsCoordSystemReady(),
+            depth_region.GetRoiClickCount(),
+            g_runtime_flags.record_enabled,
+            depth_region.GetLandingPointCount(),
+            posture_metrics.label,
+            depth_ui));
+        realtime_bridge.PublishFrame(display);
+      } else {
+        cv::imshow("Body Frame Metrics", metrics_panel);
 
-      cv::imshow(kMainWindow, display);
-      if (depth_ui.show_raw_depth && !raw_depth_data.empty()) {
-        cv::imshow(kRawDepthWindow, ColorizeDepth(raw_depth_data));
-        raw_depth_window_open = true;
-      } else {
-        if (raw_depth_window_open) {
-          cv::destroyWindow(kRawDepthWindow);
-          raw_depth_window_open = false;
+        cv::imshow(kMainWindow, display);
+        if (depth_ui.show_raw_depth && !raw_depth_data.empty()) {
+          cv::imshow(kRawDepthWindow, ColorizeDepth(raw_depth_data));
+          raw_depth_window_open = true;
+        } else {
+          if (raw_depth_window_open) {
+            cv::destroyWindow(kRawDepthWindow);
+            raw_depth_window_open = false;
+          }
         }
-      }
-      if (depth_ui.show_filtered_depth && !depth_data.empty()) {
-        if (filtered_depth_color.empty()) {
-          filtered_depth_color = ColorizeDepth(depth_data);
-        }
-        cv::imshow(kFilteredDepthWindow, filtered_depth_color);
-        filtered_depth_window_open = true;
-      } else {
-        if (filtered_depth_window_open) {
-          cv::destroyWindow(kFilteredDepthWindow);
-          filtered_depth_window_open = false;
+        if (depth_ui.show_filtered_depth && !depth_data.empty()) {
+          if (filtered_depth_color.empty()) {
+            filtered_depth_color = ColorizeDepth(depth_data);
+          }
+          cv::imshow(kFilteredDepthWindow, filtered_depth_color);
+          filtered_depth_window_open = true;
+        } else {
+          if (filtered_depth_window_open) {
+            cv::destroyWindow(kFilteredDepthWindow);
+            filtered_depth_window_open = false;
+          }
         }
       }
     }
 
     // Show depth region details when depth data is available
     if (!depth_data.empty()) {
-      depth_region.ShowElems<ushort>(
-          depth_data,
-          [](const ushort &elem) {
-            if (elem >= 10000) {
-              return std::string("invalid");
-            }
-            return std::to_string(elem);
-          },
-          90, depth_info);
+      if (server_mode) {
+        depth_region.TryFinalizePlaneFromROI(depth_data);
+      } else {
+        depth_region.ShowElems<ushort>(
+            depth_data,
+            [](const ushort &elem) {
+              if (elem >= 10000) {
+                return std::string("invalid");
+              }
+              return std::to_string(elem);
+            },
+            90, depth_info);
+      }
     } else {
       // Debug: print once per second if depth data is empty
       static auto last_debug = std::chrono::steady_clock::now();
@@ -1683,6 +2157,10 @@ int main(int argc, char **argv) {
     g_perf_stats.PrintIfNeeded();
 
     // Handle keyboard input
+    if (server_mode) {
+      continue;
+    }
+
     char key = static_cast<char>(cv::waitKey(1));
     if (key == 27 || key == 'q' || key == 'Q') {
       break;

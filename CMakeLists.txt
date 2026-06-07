@@ -517,6 +517,9 @@ foreach(_inc_dir
     /usr/include/pcl-1.12
     /usr/include/pcl-1.11
     /usr/include/eigen3
+    ${DEPTHAI_CORE_BUILD_DIR}/vcpkg_installed/x64-linux/include
+    ${DEPTHAI_CORE_BUILD_DIR}/../build/vcpkg_installed/x64-linux/include
+    ${DEPTHAI_CORE_BUILD_DIR}/../build_no_dcl/vcpkg_installed/x64-linux/include
 )
     if(EXISTS "${_inc_dir}")
         list(APPEND YOLO_EXTRA_INCLUDE_DIRS "${_inc_dir}")
