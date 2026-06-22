@@ -1,0 +1,41 @@
+# CMake/build outputs
+build/
+build_*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.o
+*.a
+*.d
+
+# Local executables / generated binaries
+yolo_pose_indemind_left
+yolo_pose_oak_rgbd
+
+# Logs and runtime outputs
+*.log
+*.csv
+pose_frame_*.jpg
+runs/
+
+# Large local model/data artifacts
+models/
+*.onnx
+*.zip
+
+# Keep zread-managed files visible
+!.zread/
+!.zread/**
+
+# IDE/editor local state
+.idea/workspace.xml
+.vscode/
+*.swp
+*.swo
+
+# Local agent/tool caches
+.codex/
+.claude/
+.artifacts/
+subagent.log
