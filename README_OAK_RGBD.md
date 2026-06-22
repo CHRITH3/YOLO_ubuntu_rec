@@ -59,6 +59,10 @@ export DEPTHAI_AUTOCALIBRATION=OFF
 Server mode exposes `GET /stream`, `GET /status`, `POST /click`,
 `POST /filter_params`, and `POST /control` on `127.0.0.1:8081`.
 
+When REC is enabled (`r` in the OpenCV UI, or `POST /control` with
+`{"action":"start_record"}` in server mode), the raw CAM_A RGB stream is
+saved as `runs/<session_id>/rgb.mp4`. Stopping REC closes the MP4 writer.
+
 The old target can still be built by setting `-DBUILD_INDEMIND_TARGET=ON` if the INDEMIND SDK files are present.
 
 ## Notes

@@ -364,6 +364,8 @@ static std::string RealtimeStatusJson(bool connected,
                                       bool bed_ready,
                                       int roi_clicks,
                                       bool recording,
+                                      bool rgb_recording,
+                                      const std::string& rgb_video_path,
                                       size_t landing_count,
                                       const std::string& posture,
                                       const DepthUiState& depth_ui) {
@@ -379,6 +381,8 @@ static std::string RealtimeStatusJson(bool connected,
      << "\"bed_ready\":" << (bed_ready ? "true" : "false") << ","
      << "\"roi_clicks\":" << roi_clicks << ","
      << "\"recording\":" << (recording ? "true" : "false") << ","
+     << "\"rgb_recording\":" << (rgb_recording ? "true" : "false") << ","
+     << "\"rgb_video_path\":\"" << JsonEscape(rgb_video_path) << "\","
      << "\"landing_count\":" << landing_count << ","
      << "\"posture\":\"" << JsonEscape(posture) << "\","
      << "\"filter_params\":" << FilterParamsJson(depth_ui)
@@ -1351,6 +1355,72 @@ int main(int argc, char **argv) {
   int missing_body_frames = 0;
 
   int frame_save_count = 0;
+  cv::VideoWriter rgb_video_writer;
+  std::string rgb_video_path;
+  int rgb_video_frame_count = 0;
+  bool rgb_video_open_failed = false;
+
+  auto stop_rgb_video_recording = [&]() {
+    if (!rgb_video_writer.isOpened()) {
+      return;
+    }
+    rgb_video_writer.release();
+    std::cout << "[视频] RGB MP4 recording stopped: " << rgb_video_path
+              << " | frames=" << rgb_video_frame_count << std::endl;
+    rgb_video_path.clear();
+    rgb_video_frame_count = 0;
+  };
+
+  auto start_rgb_video_recording = [&](const cv::Size& frame_size) {
+    if (rgb_video_writer.isOpened()) {
+      return true;
+    }
+    if (rgb_video_open_failed) {
+      return false;
+    }
+    if (frame_size.width <= 0 || frame_size.height <= 0) {
+      std::cerr << "[视频] 无法开始 RGB MP4 录制：帧尺寸无效" << std::endl;
+      rgb_video_open_failed = true;
+      return false;
+    }
+    if (!g_current_session.active || g_current_session.output_dir.empty()) {
+      std::cerr << "[视频] 无法开始 RGB MP4 录制：请先创建 REC 会话" << std::endl;
+      rgb_video_open_failed = true;
+      return false;
+    }
+
+    rgb_video_path = g_current_session.output_dir + "/rgb.mp4";
+    rgb_video_frame_count = 0;
+    const int fourcc = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
+    const double writer_fps = oak_cfg.fps > 0.0f ? static_cast<double>(oak_cfg.fps) : 30.0;
+    rgb_video_writer.open(rgb_video_path, fourcc, writer_fps, frame_size, true);
+    if (!rgb_video_writer.isOpened()) {
+      std::cerr << "[视频] 无法打开 RGB MP4 输出文件: " << rgb_video_path << std::endl;
+      rgb_video_path.clear();
+      rgb_video_open_failed = true;
+      return false;
+    }
+
+    std::cout << "[视频] RGB MP4 recording started: " << rgb_video_path
+              << " | size=" << frame_size.width << "x" << frame_size.height
+              << " | fps=" << writer_fps << std::endl;
+    return true;
+  };
+
+  auto write_rgb_video_frame = [&](const cv::Mat& rgb_frame) {
+    if (!g_runtime_flags.record_enabled) {
+      stop_rgb_video_recording();
+      return;
+    }
+    if (rgb_frame.empty()) {
+      return;
+    }
+    if (!rgb_video_writer.isOpened() && !start_rgb_video_recording(rgb_frame.size())) {
+      return;
+    }
+    rgb_video_writer.write(rgb_frame);
+    ++rgb_video_frame_count;
+  };
 
   // FPS calculation
   auto loop_start = std::chrono::steady_clock::now();
@@ -1383,12 +1453,17 @@ int main(int argc, char **argv) {
           const std::string& action = realtime_cmd.action;
           if (action == "start_record") {
             if (!g_runtime_flags.record_enabled) {
-              g_runtime_flags.record_enabled = true;
-              CreateNewSession();
-              depth_region.ClearLandingPoints();
+              if (CreateNewSession()) {
+                rgb_video_open_failed = false;
+                rgb_video_path.clear();
+                rgb_video_frame_count = 0;
+                g_runtime_flags.record_enabled = true;
+                depth_region.ClearLandingPoints();
+              }
             }
           } else if (action == "stop_record") {
             g_runtime_flags.record_enabled = false;
+            stop_rgb_video_recording();
           } else if (action == "clear_landing") {
             depth_region.ClearLandingPoints();
           } else if (action == "save_landing") {
@@ -1449,6 +1524,8 @@ int main(int argc, char **argv) {
 
     // Process if we have an image
     if (!left_image.empty()) {
+      write_rgb_video_frame(left_image);
+
       auto pose_start = std::chrono::steady_clock::now();
 
       // Detect poses
@@ -2095,6 +2172,8 @@ int main(int argc, char **argv) {
             depth_region.IsCoordSystemReady(),
             depth_region.GetRoiClickCount(),
             g_runtime_flags.record_enabled,
+            rgb_video_writer.isOpened(),
+            rgb_video_path,
             depth_region.GetLandingPointCount(),
             posture_metrics.label,
             depth_ui));
@@ -2227,12 +2306,18 @@ int main(int argc, char **argv) {
     } else if (key == 'r' || key == 'R') {
       // Toggle recording
       bool was_off = !g_runtime_flags.record_enabled;
-      g_runtime_flags.record_enabled = !g_runtime_flags.record_enabled;
-
-      if (g_runtime_flags.record_enabled && was_off) {
+      if (was_off) {
         // OFF -> ON: Create new session
-        CreateNewSession();
-        depth_region.ClearLandingPoints();  // Clear previous data
+        if (CreateNewSession()) {
+          rgb_video_open_failed = false;
+          rgb_video_path.clear();
+          rgb_video_frame_count = 0;
+          g_runtime_flags.record_enabled = true;
+          depth_region.ClearLandingPoints();  // Clear previous data
+        }
+      } else {
+        g_runtime_flags.record_enabled = false;
+        stop_rgb_video_recording();
       }
 
       std::cout << "[录制] REC: " << (g_runtime_flags.record_enabled ? "ON" : "OFF") << std::endl;
@@ -2253,6 +2338,7 @@ int main(int argc, char **argv) {
   double total_time = std::chrono::duration_cast<std::chrono::seconds>(
       loop_end - loop_start).count();
 
+  stop_rgb_video_recording();
   oak_capture.Stop();
   cv::destroyAllWindows();
 
